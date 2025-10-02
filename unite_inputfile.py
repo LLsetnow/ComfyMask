@@ -82,3 +82,6 @@ print("\n\n\n-------------------------------------------------------------------
 print(f"将16pfs视频,采样背景,遮罩 输出到{all_input_dir}")
 
 collect_videos(input_video_dir, search_dir, all_input_dir)
+
+# 运行命令 python unite_inputfile.py
+# 运行命令 python unite_inputfile.py
