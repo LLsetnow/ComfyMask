@@ -1,0 +1,58 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Build active C file (MinGW)",
+			"type": "shell",
+			"command": "E:/MinGW/bin/gcc.exe",
+			"args": [
+				"-Wall",
+				"-Wextra",
+				"-g3",
+				"${file}",
+				"-o",
+				"${fileDirname}\\${fileBasenameNoExtension}.exe"
+			],
+			"options": {
+				"cwd": "${workspaceFolder}",
+				"shell": {
+					"executable": "C:/Windows/System32/cmd.exe",
+					"args": [
+						"/d",
+						"/c"
+					]
+				}
+			},
+			"problemMatcher": [
+				"$gcc"
+			]
+		},
+		{
+			"label": "Build and Run active C file",
+			"type": "shell",
+			"command": "powershell",
+			"args": [
+				"-NoProfile",
+				"-ExecutionPolicy",
+				"Bypass",
+				"-Command",
+				"& \"${fileDirname}\\${fileBasenameNoExtension}.exe\""
+			],
+			"dependsOn": [
+				"Build active C file (MinGW)"
+			],
+			"dependsOrder": "sequence",
+			"group": {
+				"kind": "build",
+				"isDefault": true
+			},
+			"options": {
+				"cwd": "${fileDirname}",
+				"shell": {
+					"executable": "C:/Windows/System32/WindowsPowerShell/v1.0/powershell.exe"
+				}
+			},
+			"problemMatcher": []
+		}
+	]
+  }
