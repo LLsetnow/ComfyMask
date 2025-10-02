@@ -1,3 +1,30 @@
+"""
+视频帧率转换工具
+
+该模块提供高级视频帧率转换功能，支持丢帧、重复帧和帧插值（简化版）三种方法，并可选择是否保留音频。
+
+主要功能:
+- 支持降低或提高视频帧率。
+- 提供多种帧率转换方法（丢帧、重复帧、帧插值）。
+- 可选保留或丢弃原视频音频。
+- 自动处理视频时长与音频同步问题。
+
+使用示例:
+    from change_fps import change_video_fps_advanced
+
+    # 降低帧率并保留音频
+    success = change_video_fps_advanced("input.mp4", "output.mp4", 24, method='drop', keep_audio=True)
+
+    # 提高帧率并丢弃音频
+    success = change_video_fps_advanced("input.mp4", "output.mp4", 60, method='repeat', keep_audio=False)
+
+注意事项:
+- 帧插值功能需要 OpenCV 4.2+ 支持，否则会自动降级为重复帧方法。
+- 输出视频的编码格式为 MP4 (H.264 + AAC)。
+- 如果目标帧率与原帧率差异较大，音频可能会被截断或循环以匹配视频时长。
+
+日期: 2025-10-02
+"""
 import cv2
 import os
 from moviepy.editor import VideoFileClip, AudioFileClip
@@ -260,8 +287,6 @@ def batch_change_video_fps(input_folder, output_folder, n, file_extensions=['.mp
             print(f"处理失败: {video_file}")
 
 
-
-# 基本使用示例
 def main():
     # 批量处理示例
     input_folder = r"D:\AI_Graph\视频\输入\原视频"

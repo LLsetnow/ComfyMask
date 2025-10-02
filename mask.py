@@ -1,3 +1,43 @@
+"""
+图像分割工具模块
+
+该模块提供基于 MediaPipe 和 YOLOv8 的图像分割功能，支持人物分割和脸部分割。
+
+主要功能:
+- MediaPipeSegmenter: 基于 MediaPipe 实现的人物和脸部分割。
+- YOLOv8Segmenter: 基于 YOLOv8 实现的人物分割和近似脸部分割。
+
+类说明:
+1. MediaPipeSegmenter:
+   - get_person_mask: 获取人物分割遮罩。
+   - get_face_mask: 获取精确的脸部分割遮罩。
+   - release: 释放资源（可选）。
+
+2. YOLOv8Segmenter:
+   - get_person_mask: 获取人物分割遮罩。
+   - get_face_mask: 获取近似脸部分割遮罩（基于人物框上半部分）。
+   - get_detailed_face_mask: 结合外部检测器获取更精确的脸部遮罩。
+
+使用示例:
+    from mask import MediaPipeSegmenter, YOLOv8Segmenter
+
+    # 使用 MediaPipe 分割
+    segmenter = MediaPipeSegmenter()
+    person_mask = segmenter.get_person_mask(image_rgb)
+    face_mask = segmenter.get_face_mask(image_rgb)
+
+    # 使用 YOLOv8 分割
+    segmenter = YOLOv8Segmenter(model_path='yolov8n-seg.pt')
+    person_mask = segmenter.get_person_mask(image_rgb)
+    face_mask = segmenter.get_face_mask(image_rgb)
+
+注意事项:
+- MediaPipe 适用于实时应用  ，且精度较低，YOLOv8 适用于高精度需求，且精度较高。
+- 确保输入图像为 RGB 格式。
+- YOLOv8 需要额外安装 ultralytics 和 torch。
+
+日期: 2025-10-02
+"""
 import cv2
 import os
 import mediapipe as mp
