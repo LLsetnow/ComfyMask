@@ -35,6 +35,7 @@ collect_videos(input_video_dir, search_dir, all_input_dir):
 """
 import os
 import shutil
+from turtle import st
 
 def collect_videos(input_video_dir, search_dir, all_input_dir):
     """
@@ -43,7 +44,7 @@ def collect_videos(input_video_dir, search_dir, all_input_dir):
     """
     # 确保 all_input 目录存在
     os.makedirs(all_input_dir, exist_ok=True)
-
+    i = 0
     for file in os.listdir(input_video_dir):
         if not file.lower().endswith((".mp4", ".avi", ".mov", ".mkv")):
             continue  # 只处理视频文件
@@ -62,17 +63,23 @@ def collect_videos(input_video_dir, search_dir, all_input_dir):
         os.makedirs(save_dir, exist_ok=True)
 
         # 复制原视频
-        shutil.copy2(video_path, os.path.join(save_dir, file))
+        OriginVideo = f"OriginVideo{i}.mp4"
+        shutil.copy2(video_path, os.path.join(save_dir, OriginVideo))
+        shutil.copy2(video_path, os.path.join(all_input_dir, OriginVideo))
 
         # 复制 Background.mp4 和 BodyMask.mp4
         for subfile in ["Background.mp4", "BodyMask.mp4"]:
             src_file = os.path.join(target_folder, subfile)
             if os.path.exists(src_file):
-                shutil.copy2(src_file, os.path.join(save_dir, subfile))
+                file_name, _ = os.path.splitext(subfile)
+                file_name = file_name + f"{i}.mp4"
+                shutil.copy2(src_file, os.path.join(save_dir, file_name))
+                shutil.copy2(src_file, os.path.join(all_input_dir, file_name))
             else:
                 print(f"⚠️ 文件不存在: {src_file}")
 
         print(f"✅ 已处理 {file} → {save_dir}")
+        i += 1
 
 input_video_dir = "D:\AI_Graph\视频\输入\原视频_16fps"      # 存放原始视频
 search_dir = "D:\AI_Graph\视频\遮罩视频"           # 存放 name 文件夹的目录
@@ -83,5 +90,3 @@ print(f"将16pfs视频,采样背景,遮罩 输出到{all_input_dir}")
 
 collect_videos(input_video_dir, search_dir, all_input_dir)
 
-# 运行命令 python unite_inputfile.py
-# 运行命令 python unite_inputfile.py
