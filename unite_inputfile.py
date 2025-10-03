@@ -82,8 +82,8 @@ def collect_videos(input_video_dir, search_dir, all_input_dir):
         i += 1
 
 input_video_dir = "D:\AI_Graph\视频\输入\原视频_16fps"      # 存放原始视频
-search_dir = "D:\AI_Graph\视频\遮罩视频"           # 存放 name 文件夹的目录
-all_input_dir = "D:\AI_Graph\视频\输入\输入视频整合"          # 输出目录
+search_dir = "D:\AI_Graph\视频\输入\遮罩视频"           # 存放 name 文件夹的目录
+all_input_dir = "D:\AI_Graph\inputFiles"          # 输出目录
 
 print("\n\n\n----------------------------------------------------------------------")
 print(f"将16pfs视频,采样背景,遮罩 输出到{all_input_dir}")

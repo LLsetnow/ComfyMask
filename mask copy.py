@@ -40,13 +40,11 @@
 """
 import cv2
 import os
-import torch
 import mediapipe as mp
 import numpy as np
 from tqdm import tqdm
-import shutil
-from sam2.build_sam import build_sam2_video_predictor
 # from ultralytics import YOLO
+# import torch
 
 class MediaPipeSegmenter:
     """MediaPipe分割器类"""
@@ -307,79 +305,6 @@ class HybridSegmenter:
         self.yolo_segmenter.release()
         if self.face_mesh is not None:
             self.face_mesh.close()
-def process_frame_with_sam2(
-    predictor,
-    inference_state,
-    frame: np.ndarray,
-    points: list,
-    labels: list,
-    frame_idx: int) -> np.ndarray:
-    """
-    逐帧处理函数，返回当前帧的蒙版。
-    
-    Args:
-        predictor: SAM2 预测器对象
-        inference_state: 推理状态
-        frame: 当前帧（RGB 格式）
-        points: 用户选择的点坐标列表
-        labels: 点标签（1=正样本，0=负样本）
-        frame_idx: 当前帧索引
-    """
-    # 转换输入格式
-    input_points = np.array(points, dtype=np.float32)
-    input_labels = np.array(labels, dtype=np.int32)
-
-    # 处理当前帧
-    _, _, out_mask_logits = predictor.add_new_points_or_box(
-        inference_state=inference_state,
-        frame_idx=frame_idx,
-        obj_id=1,
-        points=input_points,
-        labels=input_labels,
-    )
-
-    # 生成蒙版
-    mask = (out_mask_logits[0] > 0.0).cpu().numpy()
-    if mask.ndim == 3:
-        mask = mask.squeeze(0)
-    return mask.astype(np.uint8) * 255
-def load_points_from_json(video_path, json_folder = "D:\AI_Graph\视频\输入\sam坐标"):
-    """
-    从 json_folder文件夹内读取同名的json文件, 并从文件中读取正负点数据
-
-    参数:
-    json_folder: JSON 文件所在的文件夹路径
-    video_path: 输入视频的路径
-
-    返回:
-    positive_points: 正点列表
-    negative_points: 负点列表
-    """
-    import json
-    import os
-
-    # 从视频路径中提取文件名（不含扩展名）
-    video_name = os.path.splitext(os.path.basename(video_path))[0]
-    json_path = os.path.join(json_folder, f"{video_name}.json")
-
-    # 初始化返回列表
-    positive_points = []
-    negative_points = []
-
-    # 检查 JSON 文件是否存在
-    if not os.path.exists(json_path):
-        print(f"JSON 文件不存在: {json_path}")
-        return positive_points, negative_points
-
-    # 读取 JSON 文件内容
-    with open(json_path, 'r', encoding='utf-8') as f:
-        data = json.load(f)
-
-    # 提取正负点数据
-    positive_points = data.get("positive", [])
-    negative_points = data.get("negative", [])
-
-    return positive_points, negative_points
 def fill_above_min_y(face_mask):
     """
     将面部所在位置以上的所有像素点涂白
@@ -528,21 +453,19 @@ def remove_small_components(mask, n):
             new_mask[labels == i] = 255
 
     return new_mask
-def process_single_video(video_path, output_root, video_count, display = False):
+def process_single_video(video_path, output_root, display = False):
     """
     核心代码
     处理单个视频，输出对应的遮罩视频
     """
-    # 复制输入视频到 output_root 目录下
-    origin_video_path = os.path.join(output_root, f"OriginVideo{video_count}.mp4")
-    shutil.copy(video_path, origin_video_path)
-    
     video_name, _ = os.path.splitext(os.path.basename(video_path))
+    output_dir = os.path.join(output_root, video_name)
+    os.makedirs(output_dir, exist_ok=True)
 
-    # person_mask_video = os.path.join(output_root, f"PersonMask{video_count}.mp4")
-    # face_mask_video = os.path.join(output_root, f"FaceMask{video_count}.mp4")
-    body_mask_video = os.path.join(output_root, f"BodyMask{video_count}.mp4")
-    background_video = os.path.join(output_root, f"Background{video_count}.mp4")
+    person_mask_video = os.path.join(output_dir, f"PersonMask.mp4")
+    face_mask_video = os.path.join(output_dir, f"FaceMask.mp4")
+    body_mask_video = os.path.join(output_dir, f"BodyMask.mp4")
+    background_video = os.path.join(output_dir, f"Background.mp4")
 
     # 初始化分割器
     if USE_MEDIAPIPE:
@@ -557,34 +480,21 @@ def process_single_video(video_path, output_root, video_count, display = False):
     frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
 
     fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-    # out_person = cv2.VideoWriter(person_mask_video, fourcc, fps, (width, height), isColor=False)
-    # out_face = cv2.VideoWriter(face_mask_video, fourcc, fps, (width, height), isColor=False)
+    out_person = cv2.VideoWriter(person_mask_video, fourcc, fps, (width, height), isColor=False)
+    out_face = cv2.VideoWriter(face_mask_video, fourcc, fps, (width, height), isColor=False)
     out_body = cv2.VideoWriter(body_mask_video, fourcc, fps, (width, height), isColor=False)
     out_final = cv2.VideoWriter(background_video, fourcc, fps, (width, height))
 
-    if SAM_FLAG:
-        # 读取sam识别点坐标
-        positive_points, negative_points = load_points_from_json(video_path)
-        inference_state = predictor.init_state(video_path=video_path)
-        predictor.reset_state(inference_state)
-        input_points = np.array(positive_points + negative_points, dtype=np.float32)
-        input_labels = np.array([1] * len(positive_points) + [0] * len(negative_points), dtype=np.int32)
-
     try:
-
-        # 处理所有帧
         for frame_count in tqdm(range(frames), desc=f"Processing {video_name}", unit="frame"):
             ret, frame = cap.read()
             if not ret:
                 break
 
             image_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            if SAM_FLAG:
-                person_mask = process_frame_with_sam2(predictor, inference_state, image_rgb, input_points, input_labels, frame_count)
-            else:
-                person_mask = segmenter.get_person_mask(image_rgb, threshold=THRESHOLD)
-            
-            # 获取面部蒙版
+
+            # 获取主体和面部蒙版
+            person_mask = segmenter.get_person_mask(image_rgb, threshold=THRESHOLD)
             face_mask = segmenter.get_face_mask(image_rgb)
             if SKIN_DETECT:
                 skin_mask = detect_skin_mask(image_rgb)
@@ -592,8 +502,9 @@ def process_single_video(video_path, output_root, video_count, display = False):
 
             if person_mask is None:
                 continue
-                
+            
             # 核心操作
+
             # 对主体和面部蒙版进行膨胀和方块化
             processed_person_mask = apply_dilation_and_squarization(
                 person_mask, BODY_DILATION, BODY_SQUARE
@@ -617,8 +528,8 @@ def process_single_video(video_path, output_root, video_count, display = False):
             # 输出视频帧
             final_output = frame.copy()
             final_output[body_mask == 255] = 0
-            # out_person.write(processed_person_mask)
-            # out_face.write(processed_face_mask)
+            out_person.write(processed_person_mask)
+            out_face.write(processed_face_mask)
             out_body.write(body_mask)
             out_final.write(final_output)
 
@@ -630,14 +541,13 @@ def process_single_video(video_path, output_root, video_count, display = False):
 
     finally:
         cap.release()
-        # out_person.release()
-        # out_face.release()
+        out_person.release()
+        out_face.release()
         out_body.release()
         out_final.release()
         segmenter.release()
         cv2.destroyAllWindows()
-
-def process_videos(input_dir, output_root, start_index = 0):
+def process_videos(input_dir, output_root):
     """
     如果 input_dir 是视频文件 → 处理单个视频
     如果 input_dir 是文件夹 → 遍历处理所有视频
@@ -649,23 +559,17 @@ def process_videos(input_dir, output_root, start_index = 0):
             print(f"输入文件不是视频: {input_dir}")
     elif os.path.isdir(input_dir):
         video_files = [f for f in os.listdir(input_dir) if f.lower().endswith((".mp4", ".avi", ".mov", ".mkv"))]
-        video_count = start_index
         for filename in tqdm(video_files, desc="Processing all videos", unit="video"):
             video_path = os.path.join(input_dir, filename)
-            process_single_video(video_path, output_root, video_count, False)
-            video_count += 1
+            process_single_video(video_path, output_root, False)
     else:
         print(f"输入路径不存在: {input_dir}")
 
 
 # 可调节参数
-model_cfg = "D:\\AI_Graph\\sam2\\sam2\\configs\\sam2.1\\sam2.1_hiera_b+.yaml"
-sam2_checkpoint = "D:\\AI_Graph\\sam2\\checkpoints\\sam2.1_hiera_base_plus.pt"
-
 # True False
 DILATION_KERNEL_SIZE = 0  # 膨胀核大小，可调节膨胀程度
 SQUARE_SIZE = 16  # 方块大小，可调节方块化程度
-SAM_FLAG = True   # 是否使用sam识别主体
 DRAW_DOWN = False  # 将下1/3区域全部图黑
 UP_CLEAR = True    # 将头部上方清空
 SKIN_DETECT = False # 去除皮肤部分
@@ -681,20 +585,10 @@ FACE_THRESHOLD = 0.5    # 面部阈值
 USE_MEDIAPIPE = True  # 设置为False可以切换为其他分割器（如YOLO）
 USE_YOLO = False
 
-if SAM_FLAG:
-    # 初始化 SAM2 预测器
-    if torch.cuda.is_available():
-        device = torch.device("cuda")
-    elif torch.backends.mps.is_available():
-        device = torch.device("mps")
-    else:
-        device = torch.device("cpu")
-    predictor = build_sam2_video_predictor(model_cfg, sam2_checkpoint, device=device)
-
 if __name__ == "__main__":
-    input_dir = r"D:\AI_Graph\视频\输入\原视频_16fps"  # 可以是单个视频路径，也可以是文件夹路径
-    output_root = r"D:\AI_Graph\视频\输入\输入视频整合"
+    input_dir = r"D:\AI_Graph\视频\输入\原视频_16fps\不许笑 胜利女神新的希望 马斯特 泳装 - 抖音.mp4"  # 可以是单个视频路径，也可以是文件夹路径
+    output_root = r"D:\AI_Graph\视频\遮罩视频"
 
     print("\n\n\n----------------------------------------------------------------------")
     print(f"将{input_dir}生成为遮罩, 输出到{output_root}")
-    process_videos(input_dir, output_root, start_index=0)
+    process_videos(input_dir, output_root)
