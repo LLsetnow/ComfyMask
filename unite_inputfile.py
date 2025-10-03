@@ -62,6 +62,7 @@ def collect_videos(input_video_dir, search_dir, all_input_dir):
         save_dir = os.path.join(all_input_dir, name)
         # os.makedirs(save_dir, exist_ok=True) # 关闭单独文件夹保存
 
+
         # 复制原视频
         OriginVideo = f"OriginVideo{i}.mp4"
         # shutil.copy2(video_path, os.path.join(save_dir, OriginVideo)) # 关闭单独文件夹保存
