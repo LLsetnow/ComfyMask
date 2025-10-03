@@ -308,35 +308,6 @@ class HybridSegmenter:
         self.yolo_segmenter.release()
         if self.face_mesh is not None:
             self.face_mesh.close()
-"""def sam_init(
-    model_cfg, 
-    sam2_checkpoint, 
-    points, 
-    labels,
-    inference_state):
-
-    # 初始化SAM2推理器
-
-    if torch.cuda.is_available():
-        device = torch.device("cuda")
-    elif torch.backends.mps.is_available():
-        device = torch.device("mps")
-    else:
-        device = torch.device("cpu")
-    predictor = build_sam2_video_predictor(model_cfg, sam2_checkpoint, device=device)
-
-    # 转换输入格式
-    input_points = np.array(points, dtype=np.float32)
-    input_labels = np.array(labels, dtype=np.int32)
-    
-    # 处理当前帧
-    _, _, out_mask_logits = predictor.add_new_points_or_box(
-        inference_state=inference_state,
-        frame_idx=frame_idx,
-        obj_id=1,
-        points=input_points,
-        labels=input_labels,
-)"""
 def process_frame_with_sam2(
     predictor,
     inference_state,
@@ -491,14 +462,35 @@ def click_event(event, x, y, flags, param):
         print("Error: fram4samPoint_global is invalid or empty.")
         return
 
+    # 获取原始图像尺寸
+    original_height, original_width = fram4samPoint_global.shape[:2]
+
+    # 计算缩放比例
+    max_width = 720
+    max_height = 1080
+    scale = min(max_width / original_width, max_height / original_height)
+    scale = min(scale, 1.0)  # 仅缩小，不放大
+
+    # 缩放坐标
+    scaled_x = int(x / scale)
+    scaled_y = int(y / scale)
+
     if event == cv2.EVENT_LBUTTONDOWN:
-        positive_points.append((x, y))
-        cv2.circle(fram4samPoint_global, (x, y), 5, (0, 255, 0), -1)  # Green for positive points
-        cv2.imshow('First Frame', fram4samPoint_global)
+        positive_points.append((scaled_x, scaled_y))
+        cv2.circle(fram4samPoint_global, (scaled_x, scaled_y), 5, (0, 255, 0), -1)  # Green for positive points
     elif event == cv2.EVENT_RBUTTONDOWN:
-        negative_points.append((x, y))
-        cv2.circle(fram4samPoint_global, (x, y), 5, (0, 0, 255), -1)  # Red for negative points
-        cv2.imshow('First Frame', fram4samPoint_global)
+        negative_points.append((scaled_x, scaled_y))
+        cv2.circle(fram4samPoint_global, (scaled_x, scaled_y), 5, (0, 0, 255), -1)  # Red for negative points
+
+    # 显示缩放后的图像
+    resized_frame = cv2.resize(fram4samPoint_global, None, fx=scale, fy=scale)
+    cv2.imshow('First Frame', resized_frame)
+
+    # 强制设置窗口大小为缩放后的尺寸
+    cv2.resizeWindow('First Frame', int(original_width * scale), int(original_height * scale))
+
+
+
 def fill_above_min_y(face_mask):
     """
     将面部所在位置以上的所有像素点涂白
@@ -659,7 +651,7 @@ def process_single_video(video_path, output_root, video_count, display = False):
     video_name, _ = os.path.splitext(os.path.basename(video_path))
 
     # person_mask_video = os.path.join(output_root, f"PersonMask{video_count}.mp4")
-    face_mask_video = os.path.join(output_root, f"FaceMask{video_count}.mp4")
+    # face_mask_video = os.path.join(output_root, f"FaceMask{video_count}.mp4")
     body_mask_video = os.path.join(output_root, f"BodyMask{video_count}.mp4")
     background_video = os.path.join(output_root, f"Background{video_count}.mp4")
 
@@ -677,7 +669,7 @@ def process_single_video(video_path, output_root, video_count, display = False):
 
     fourcc = cv2.VideoWriter_fourcc(*'mp4v')
     # out_person = cv2.VideoWriter(person_mask_video, fourcc, fps, (width, height), isColor=False)
-    out_face = cv2.VideoWriter(face_mask_video, fourcc, fps, (width, height), isColor=False)
+    # out_face = cv2.VideoWriter(face_mask_video, fourcc, fps, (width, height), isColor=False)
     out_body = cv2.VideoWriter(body_mask_video, fourcc, fps, (width, height), isColor=False)
     out_final = cv2.VideoWriter(background_video, fourcc, fps, (width, height))
 
@@ -688,6 +680,7 @@ def process_single_video(video_path, output_root, video_count, display = False):
             # 窗口点选
             global fram4samPoint_global, positive_points, negative_points
             cap4samPoint = cv2.VideoCapture(video_path)
+            cap4samPoint.set(cv2.CAP_PROP_POS_FRAMES, DrawPointFrame)
             ret, fram4samPoint_global = cap4samPoint.read()
             cv2.imshow('First Frame', fram4samPoint_global)
             cv2.setMouseCallback('First Frame', click_event)
@@ -758,20 +751,30 @@ def process_single_video(video_path, output_root, video_count, display = False):
             final_output = frame.copy()
             final_output[body_mask == 255] = 0
             # out_person.write(processed_person_mask)
-            out_face.write(processed_face_mask)
+            # out_face.write(processed_face_mask)
             out_body.write(body_mask)
             out_final.write(final_output)
 
             # 窗口打印
             if display:
-                cv2.imshow('Final Output', final_output)
-                if cv2.waitKey(1) & 0xFF == ord('q'):  # 1ms刷新，按q退出
+                # 创建一个可调整大小的窗口
+                cv2.namedWindow('Final Output', cv2.WINDOW_NORMAL)
+                
+                show_frame = final_output.resize(width=832, height=480)
+                # 设置窗口的初始大小（可选）
+                cv2.resizeWindow('Final Output', width=832, height=480)  # 设置初始大小为 800x600
+                # 显示图像
+                cv2.imshow('Final Output', show_frame)
+                
+                # 按 'q' 退出
+                if cv2.waitKey(1) & 0xFF == ord('q'):
                     break
+
 
     finally:
         cap.release()
         # out_person.release()
-        out_face.release()
+        # out_face.release()
         out_body.release()
         out_final.release()
         segmenter.release()
@@ -803,20 +806,23 @@ negative_points = []
 # 可调节参数
 model_cfg = "D:\\AI_Graph\\sam2\\sam2\\configs\\sam2.1\\sam2.1_hiera_b+.yaml"
 sam2_checkpoint = "D:\\AI_Graph\\sam2\\checkpoints\\sam2.1_hiera_base_plus.pt"
+# model_cfg = "configs/sam2.1/sam2.1_hiera_l.yaml"
+# sam2_checkpoint = "../checkpoints/sam2.1_hiera_large.pt"
 
 # True False
 DILATION_KERNEL_SIZE = 0  # 膨胀核大小，可调节膨胀程度
 SQUARE_SIZE = 16  # 方块大小，可调节方块化程度
 SAM_FLAG = True   # 是否使用sam识别主体
 SAM_POINT_CLICK = True  # 是否使用sam点选
+DrawPointFrame = 32  # 选择视频的第几帧画点
 DRAW_DOWN = False  # 将下1/3区域全部图黑
 UP_CLEAR = False    # 将头部上方清空
 SKIN_DETECT = False # 去除皮肤部分
 
 FACE_DILATION = 0
 FACE_SQUARE = 32
-BODY_DILATION = 32
-BODY_SQUARE = 32
+BODY_DILATION = 48
+BODY_SQUARE = 48
 
 THRESHOLD = 0.1         # 身体阈值
 FACE_THRESHOLD = 0.5    # 面部阈值
@@ -835,10 +841,10 @@ if SAM_FLAG:
     predictor = build_sam2_video_predictor(model_cfg, sam2_checkpoint, device=device)
 
 if __name__ == "__main__":
-    name = "胜利小舞蹈 胜利之舞 反差 甜御 - 抖音"
+    name = "我也来俏皮一下 dl摇 dl运镜挑战 这样运镜真的很俏皮给夏天一点颜色看看 恋夏风 - 抖音"
     input_dir = f"D:\AI_Graph\视频\输入\原视频_16fps\{name}.mp4"  # 可以是单个视频路径，也可以是文件夹路径
     output_root = r"D:\AI_Graph\视频\输入\输入视频整合"
     
     print("\n\n\n----------------------------------------------------------------------")
     print(f"将{input_dir}生成为遮罩, 输出到{output_root}")
-    process_videos(input_dir, output_root, start_index=2)
+    process_videos(input_dir, output_root, start_index=3)
