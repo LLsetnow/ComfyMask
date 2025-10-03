@@ -114,7 +114,7 @@ def process_videos(video_path: str, json_dir: str):
         print(f"Error: Invalid path: {video_path}")
 
 def main():
-    video_path = r"D:\AI_Graph\视频\输入\原视频_16fps"
+    video_path = r"D:\AI_Graph\视频\输入\原视频_16fps\duang 黑川美羽 皮衣 慢摇 - 抖音.mp4"
     json_dir = r"D:\AI_Graph\视频\输入\sam坐标"
     process_videos(video_path, json_dir)   
 

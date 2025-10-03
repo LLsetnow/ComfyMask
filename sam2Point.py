@@ -85,8 +85,7 @@ def process_video_with_sam2(
     mask_dir: str,
     mask_name: str,
     sam2_checkpoint: str = "D:\\AI_Graph\\sam2\\checkpoints\\sam2.1_hiera_base_plus.pt",
-    model_cfg: str = "D:\\AI_Graph\\sam2\\sam2\\configs\\sam2.1\\sam2.1_hiera_b+.yaml"
-):
+    model_cfg: str = "D:\\AI_Graph\\sam2\\sam2\\configs\\sam2.1\\sam2.1_hiera_b+.yaml"):
     """
     Process a video with SAM2 to generate segmentation masks.
     
