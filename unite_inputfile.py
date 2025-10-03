@@ -60,11 +60,11 @@ def collect_videos(input_video_dir, search_dir, all_input_dir):
 
         # all_input/name 目录
         save_dir = os.path.join(all_input_dir, name)
-        os.makedirs(save_dir, exist_ok=True)
+        # os.makedirs(save_dir, exist_ok=True) # 关闭单独文件夹保存
 
         # 复制原视频
         OriginVideo = f"OriginVideo{i}.mp4"
-        shutil.copy2(video_path, os.path.join(save_dir, OriginVideo))
+        # shutil.copy2(video_path, os.path.join(save_dir, OriginVideo)) # 关闭单独文件夹保存
         shutil.copy2(video_path, os.path.join(all_input_dir, OriginVideo))
 
         # 复制 Background.mp4 和 BodyMask.mp4
@@ -73,7 +73,7 @@ def collect_videos(input_video_dir, search_dir, all_input_dir):
             if os.path.exists(src_file):
                 file_name, _ = os.path.splitext(subfile)
                 file_name = file_name + f"{i}.mp4"
-                shutil.copy2(src_file, os.path.join(save_dir, file_name))
+                # shutil.copy2(src_file, os.path.join(save_dir, file_name)) # 关闭单独文件夹保存
                 shutil.copy2(src_file, os.path.join(all_input_dir, file_name))
             else:
                 print(f"⚠️ 文件不存在: {src_file}")
