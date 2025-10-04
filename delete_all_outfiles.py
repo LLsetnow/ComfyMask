@@ -1,3 +1,6 @@
+"""
+删除所有输出文件
+"""
 from pathlib import Path
 import shutil
 import os

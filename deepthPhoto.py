@@ -1,3 +1,7 @@
+"""
+遍历文件夹中的所有图像，生成深度图
+"""
+
 import os
 import cv2
 import numpy as np

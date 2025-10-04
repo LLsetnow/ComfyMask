@@ -1,4 +1,5 @@
 # 用于在图像上画上灰色的网格，每个网格宽度为100像素 并添加数字，坐标原点为左上角。坐标轴每500像素一个刻度值
+import cv2
 from PIL import Image, ImageDraw
 def axisImage(image, output_path):
     # 获取图像的宽度和高度
@@ -19,9 +20,9 @@ def axisImage(image, output_path):
     draw.line((0, 0, width, 0), fill=(0, 0, 0))
     # 画刻度值
     for i in range(0, width, 100):
-        draw.text((i, 0), str(i), fill=(255, 255, 255))
+        draw.text((i, 0), str(i), fill=(255, 0, 0))
     for j in range(0, height, 100):
-        draw.text((0, j), str(j), fill=(255, 255, 255))
+        draw.text((0, j), str(j), fill=(255, 0, 0))
     
     # 保存新图像
     try:
@@ -33,8 +34,8 @@ def axisImage(image, output_path):
     new_image.save(output_path)     
 
 def main():
-    image = Image.open(r'D:\AI_Graph\视频\参考图\换衣\微信图片_20250925010351_148_230.jpg')
-    axisImage(image, r'D:\AI_Graph\视频\参考图\换衣\test_axis.jpg')
+    image = Image.open(r'D:\AI_Graph\VideoCutFrame\0.jpg')
+    axisImage(image, r'D:\AI_Graph\test_axis.jpg')
 
     
 if __name__ == '__main__':

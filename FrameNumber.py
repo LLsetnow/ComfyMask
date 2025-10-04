@@ -1,3 +1,6 @@
+"""
+为视频的每一帧添加帧号
+"""
 import cv2
 import os
 import argparse

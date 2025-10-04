@@ -1,3 +1,7 @@
+"""
+遍历文件夹，裁剪面部
+"""
+
 import cv2
 import mediapipe as mp
 from pathlib import Path
