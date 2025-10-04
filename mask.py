@@ -344,34 +344,38 @@ def process_frame_with_sam2(
     if mask.ndim == 3:
         mask = mask.squeeze(0)
     return mask.astype(np.uint8) * 255
-def process_video_with_sam2(
-    predictor,
-    inference_state,
-    points: list,
-    labels: list) -> np.ndarray:
+def process_video_with_sam2(video_path) -> np.ndarray:
     """
     逐帧处理函数，返回当前帧的蒙版。
     
     Args:
-        predictor: SAM2 预测器对象
-        inference_state: 推理状态
-        frame: 当前帧（RGB 格式）
-        points: 用户选择的点坐标列表
-        labels: 点标签（1=正样本，0=负样本）
-        frame_idx: 当前帧索引
+        video_path: 视频路径
     """
-    # 转换输入格式
-    input_points = np.array(points, dtype=np.float32)
-    input_labels = np.array(labels, dtype=np.int32)
+    # 初始化SAM
+    inference_state = predictor.init_state(video_path=video_path) # 加载(跟踪)视频
+    points = np.array(positive_points + negative_points, dtype=np.float32)
+    labels = np.array([1] * len(positive_points) + [0] * len(negative_points), dtype=np.int32)
+    # predictor.reset_state(inference_state) # 重置跟踪
+    print(f"正样本点{len(positive_points)}个，负样本点{len(negative_points)}个")
+    print(f"正样本点{positive_points}")
+    print(f"负样本点{negative_points}")
     
-    # 添加跟踪点 处理首帧
+    # 从frame_idx帧 增加跟踪点
     _, _, out_mask_logits = predictor.add_new_points_or_box(
         inference_state=inference_state,
-        frame_idx=0,
+        frame_idx=DrawPointFrame,
         obj_id=1,
-        points=input_points,
-        labels=input_labels,
+        points=points,
+        labels=labels,
     )
+    # 双击扩大识别范围
+    # _, _, out_mask_logits = predictor.add_new_points_or_box(
+    #     inference_state=inference_state,
+    #     frame_idx=0,
+    #     obj_id=1,
+    #     points=points,
+    #     labels=labels,
+    # )
 
     # 在整个视频中运行传播，并在字典中收集结果
     video_segments = {}
@@ -414,7 +418,6 @@ def combine_and_plot_masks(video_segments, frame_index):
         print(f"Error: Combined mask shape {combined_mask.shape} is invalid.")
         return
     return combined_mask
-
 def load_points_from_json(video_path, json_folder = "D:\AI_Graph\视频\输入\sam坐标"):
     """
     从 json_folder文件夹内读取同名的json文件, 并从文件中读取正负点数据
@@ -462,35 +465,14 @@ def click_event(event, x, y, flags, param):
         print("Error: fram4samPoint_global is invalid or empty.")
         return
 
-    # 获取原始图像尺寸
-    original_height, original_width = fram4samPoint_global.shape[:2]
-
-    # 计算缩放比例
-    max_width = 720
-    max_height = 1080
-    scale = min(max_width / original_width, max_height / original_height)
-    scale = min(scale, 1.0)  # 仅缩小，不放大
-
-    # 缩放坐标
-    scaled_x = int(x / scale)
-    scaled_y = int(y / scale)
-
     if event == cv2.EVENT_LBUTTONDOWN:
-        positive_points.append((scaled_x, scaled_y))
-        cv2.circle(fram4samPoint_global, (scaled_x, scaled_y), 5, (0, 255, 0), -1)  # Green for positive points
+        positive_points.append((x, y))
+        cv2.circle(fram4samPoint_global, (x, y), 5, (0, 255, 0), -1)  # Green for positive points
+        cv2.imshow('First Frame', fram4samPoint_global)
     elif event == cv2.EVENT_RBUTTONDOWN:
-        negative_points.append((scaled_x, scaled_y))
-        cv2.circle(fram4samPoint_global, (scaled_x, scaled_y), 5, (0, 0, 255), -1)  # Red for negative points
-
-    # 显示缩放后的图像
-    resized_frame = cv2.resize(fram4samPoint_global, None, fx=scale, fy=scale)
-    cv2.imshow('First Frame', resized_frame)
-
-    # 强制设置窗口大小为缩放后的尺寸
-    cv2.resizeWindow('First Frame', int(original_width * scale), int(original_height * scale))
-
-
-
+        negative_points.append((x, y))
+        cv2.circle(fram4samPoint_global, (x, y), 5, (0, 0, 255), -1)  # Red for negative points
+        cv2.imshow('First Frame', fram4samPoint_global)
 def fill_above_min_y(face_mask):
     """
     将面部所在位置以上的所有像素点涂白
@@ -647,7 +629,6 @@ def process_single_video(video_path, output_root, video_count, display = False):
     # 复制输入视频到 output_root 目录下
     origin_video_path = os.path.join(output_root, f"OriginVideo{video_count}.mp4")
     shutil.copy(video_path, origin_video_path)
-    
     video_name, _ = os.path.splitext(os.path.basename(video_path))
 
     # person_mask_video = os.path.join(output_root, f"PersonMask{video_count}.mp4")
@@ -694,19 +675,21 @@ def process_single_video(video_path, output_root, video_count, display = False):
             # 读取json文件
             positive_points, negative_points = load_points_from_json(video_path)
         
-        # 初始化SAM
-        inference_state = predictor.init_state(video_path=video_path)
-        input_points = np.array(positive_points + negative_points, dtype=np.float32)
-        input_labels = np.array([1] * len(positive_points) + [0] * len(negative_points), dtype=np.int32)
+        # # 初始化SAM
+        # inference_state = predictor.init_state(video_path=video_path)
+        # input_points = np.array(positive_points + negative_points, dtype=np.float32)
+        # input_labels = np.array([1] * len(positive_points) + [0] * len(negative_points), dtype=np.int32)
         # predictor.reset_state(inference_state) # 重置跟踪
 
-        # 获取所有帧的处理结果
-        video_segments = process_video_with_sam2(predictor, inference_state, input_points, input_labels)
+        # 获取所有帧的sam处理结果
+        video_segments = process_video_with_sam2(video_path)
+    
     try:
-
+        
         # 处理所有帧
-        for frame_count in tqdm(range(frames), desc=f"Processing {video_name}", unit="frame"):
+        for frame_count in tqdm(range(DrawPointFrame, frames), desc=f"Processing {video_name}", unit="frame"):
             ret, frame = cap.read()
+
             if not ret:
                 break
 
@@ -728,30 +711,30 @@ def process_single_video(video_path, output_root, video_count, display = False):
                 continue
                 
             # 对主体和面部蒙版进行膨胀和方块化
-            processed_person_mask = apply_dilation_and_squarization(
+            person_mask = apply_dilation_and_squarization(
                 person_mask, BODY_DILATION, BODY_SQUARE
             )
-            processed_face_mask = apply_dilation_and_squarization(
+            face_mask = apply_dilation_and_squarization(
                 face_mask, FACE_DILATION, FACE_SQUARE
             )
 
             # 清空头的上方区域（不识别）
             if UP_CLEAR:
-                processed_face_mask = fill_above_min_y(processed_face_mask)
+                face_mask = fill_above_min_y(face_mask)
             # 强制识别下30%的区域
             if DRAW_DOWN:
-                processed_person_mask = fill_below_y(processed_person_mask, int(height * 0.7))
+                person_mask = fill_below_y(person_mask, int(height * 0.7))
             
             # 主体区域 - 面部区域 - 皮肤区域（如果开启）
-            body_mask = cv2.bitwise_and(processed_person_mask, cv2.bitwise_not(processed_face_mask))
+            body_mask = cv2.bitwise_and(person_mask, cv2.bitwise_not(face_mask))
             if SKIN_DETECT:
                 body_mask = cv2.bitwise_and(body_mask, cv2.bitwise_not(skin_mask))
 
             # 输出视频帧
             final_output = frame.copy()
-            final_output[body_mask == 255] = 0
+            final_output[person_mask == 255] = 0
             # out_person.write(processed_person_mask)
-            # out_face.write(processed_face_mask)
+            # out_face.write(face_mask)
             out_body.write(body_mask)
             out_final.write(final_output)
 
@@ -760,11 +743,10 @@ def process_single_video(video_path, output_root, video_count, display = False):
                 # 创建一个可调整大小的窗口
                 cv2.namedWindow('Final Output', cv2.WINDOW_NORMAL)
                 
-                show_frame = final_output.resize(width=832, height=480)
                 # 设置窗口的初始大小（可选）
-                cv2.resizeWindow('Final Output', width=832, height=480)  # 设置初始大小为 800x600
+                cv2.resizeWindow('Final Output', width=480, height=832) 
                 # 显示图像
-                cv2.imshow('Final Output', show_frame)
+                cv2.imshow('Final Output', final_output)
                 
                 # 按 'q' 退出
                 if cv2.waitKey(1) & 0xFF == ord('q'):
@@ -810,10 +792,12 @@ sam2_checkpoint = "D:\\AI_Graph\\sam2\\checkpoints\\sam2.1_hiera_base_plus.pt"
 # sam2_checkpoint = "../checkpoints/sam2.1_hiera_large.pt"
 
 # True False
+FLAG_100FRAMS = True
 DILATION_KERNEL_SIZE = 0  # 膨胀核大小，可调节膨胀程度
 SQUARE_SIZE = 16  # 方块大小，可调节方块化程度
 SAM_FLAG = True   # 是否使用sam识别主体
 SAM_POINT_CLICK = True  # 是否使用sam点选
+
 DrawPointFrame = 32  # 选择视频的第几帧画点
 DRAW_DOWN = False  # 将下1/3区域全部图黑
 UP_CLEAR = False    # 将头部上方清空
@@ -821,8 +805,8 @@ SKIN_DETECT = False # 去除皮肤部分
 
 FACE_DILATION = 0
 FACE_SQUARE = 32
-BODY_DILATION = 48
-BODY_SQUARE = 48
+BODY_DILATION = 0
+BODY_SQUARE = 0
 
 THRESHOLD = 0.1         # 身体阈值
 FACE_THRESHOLD = 0.5    # 面部阈值
@@ -841,10 +825,10 @@ if SAM_FLAG:
     predictor = build_sam2_video_predictor(model_cfg, sam2_checkpoint, device=device)
 
 if __name__ == "__main__":
-    name = "我也来俏皮一下 dl摇 dl运镜挑战 这样运镜真的很俏皮给夏天一点颜色看看 恋夏风 - 抖音"
+    name = "不许笑 胜利女神新的希望 马斯特 泳装 - 抖音"
     input_dir = f"D:\AI_Graph\视频\输入\原视频_16fps\{name}.mp4"  # 可以是单个视频路径，也可以是文件夹路径
     output_root = r"D:\AI_Graph\视频\输入\输入视频整合"
     
     print("\n\n\n----------------------------------------------------------------------")
     print(f"将{input_dir}生成为遮罩, 输出到{output_root}")
-    process_videos(input_dir, output_root, start_index=3)
+    process_videos(input_dir, output_root, start_index=4)
