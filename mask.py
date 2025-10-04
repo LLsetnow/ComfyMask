@@ -786,10 +786,8 @@ def process_videos(input_dir, output_root, start_index = 0):
 positive_points = []
 negative_points = []
 # 可调节参数
-model_cfg = "D:\\AI_Graph\\sam2\\sam2\\configs\\sam2.1\\sam2.1_hiera_b+.yaml"
-sam2_checkpoint = "D:\\AI_Graph\\sam2\\checkpoints\\sam2.1_hiera_base_plus.pt"
-# model_cfg = "configs/sam2.1/sam2.1_hiera_l.yaml"
-# sam2_checkpoint = "../checkpoints/sam2.1_hiera_large.pt"
+model_cfg = "configs\\sam2.1\\sam2.1_hiera_b+.yaml"
+sam2_checkpoint = "checkpoints\\sam2.1_hiera_base_plus.pt"
 
 # True False
 FLAG_100FRAMS = True
@@ -798,7 +796,7 @@ SQUARE_SIZE = 16  # 方块大小，可调节方块化程度
 SAM_FLAG = True   # 是否使用sam识别主体
 SAM_POINT_CLICK = True  # 是否使用sam点选
 
-DrawPointFrame = 32  # 选择视频的第几帧画点
+DrawPointFrame = 0  # 选择视频的第几帧画点
 DRAW_DOWN = False  # 将下1/3区域全部图黑
 UP_CLEAR = False    # 将头部上方清空
 SKIN_DETECT = False # 去除皮肤部分
@@ -825,7 +823,7 @@ if SAM_FLAG:
     predictor = build_sam2_video_predictor(model_cfg, sam2_checkpoint, device=device)
 
 if __name__ == "__main__":
-    name = "不许笑 胜利女神新的希望 马斯特 泳装 - 抖音"
+    name = "好久不见呀 想我了吗 甘雨 cos 原神 fyp - 抖音"
     input_dir = f"D:\AI_Graph\视频\输入\原视频_16fps\{name}.mp4"  # 可以是单个视频路径，也可以是文件夹路径
     output_root = r"D:\AI_Graph\视频\输入\输入视频整合"
     
