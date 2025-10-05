@@ -42,7 +42,7 @@ def mkdir_and_rename_files(name, path, start_index=1):
     rename_files(duibi_dir, name, "对比", start_index)
         
 if __name__ == "__main__":
-    path = r"D:\AI_Graph\视频\视频去衣\对比视频_00030-audio\output"
+    path = r"D:\AI_Graph\视频\视频去衣\output"
     name = "小野莉乃"
     mkdir_and_rename_files(name, path, start_index=0)
     print("批量改名完成")
