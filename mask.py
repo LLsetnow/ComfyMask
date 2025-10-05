@@ -1,45 +1,8 @@
-"""
-图像分割工具模块
-
-该模块提供基于 MediaPipe 和 YOLOv8 的图像分割功能，支持人物分割和脸部分割。
-
-主要功能:
-- MediaPipeSegmenter: 基于 MediaPipe 实现的人物和脸部分割。
-- YOLOv8Segmenter: 基于 YOLOv8 实现的人物分割和近似脸部分割。
-
-类说明:
-1. MediaPipeSegmenter:
-   - get_person_mask: 获取人物分割遮罩。
-   - get_face_mask: 获取精确的脸部分割遮罩。
-   - release: 释放资源（可选）。
-
-2. YOLOv8Segmenter:
-   - get_person_mask: 获取人物分割遮罩。
-   - get_face_mask: 获取近似脸部分割遮罩（基于人物框上半部分）。
-   - get_detailed_face_mask: 结合外部检测器获取更精确的脸部遮罩。
-
-使用示例:
-    from mask import MediaPipeSegmenter, YOLOv8Segmenter
-
-    # 使用 MediaPipe 分割
-    segmenter = MediaPipeSegmenter()
-    person_mask = segmenter.get_person_mask(image_rgb)
-    face_mask = segmenter.get_face_mask(image_rgb)
-
-    # 使用 YOLOv8 分割
-    segmenter = YOLOv8Segmenter(model_path='yolov8n-seg.pt')
-    person_mask = segmenter.get_person_mask(image_rgb)
-    face_mask = segmenter.get_face_mask(image_rgb)
-
-注意事项:
-- MediaPipe 适用于实时应用  ，且精度较低，YOLOv8 适用于高精度需求，且精度较高。
-- 确保输入图像为 RGB 格式。
-- YOLOv8 需要额外安装 ultralytics 和 torch。
-
-日期: 2025-10-02
-"""
 import cv2
 import os
+import shutil
+import numpy as np
+import json
 from cv2.gapi import mask
 import torch
 import mediapipe as mp
@@ -107,207 +70,6 @@ class MediaPipeSegmenter:
         """释放资源（如果需要）"""
         # MediaPipe的模型通常不需要手动释放
         pass
-class YOLOv8Segmenter:
-    """YOLOv8分割器类"""
-
-    def __init__(self, model_path='yolov8n-seg.pt', confidence_threshold=0.5, device='auto'):
-        """
-        初始化YOLOv8分割器
-
-        参数:
-        model_path: YOLOv8模型路径，默认为yolov8n-seg.pt（轻量版分割模型）
-        confidence_threshold: 检测置信度阈值
-        device: 运行设备，'auto'、'cpu'或'cuda'
-        """
-        # 加载YOLOv8模型
-        self.model = YOLO(model_path)
-        self.confidence_threshold = confidence_threshold
-        self.device = device
-
-        # 设置模型推理设备
-        if device == 'auto':
-            self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
-
-        # 人物类别ID（COCO数据集中person类别为0）
-        self.person_class_id = 0
-
-        print(f"YOLOv8模型已加载，使用设备: {self.device}")
-
-    def get_person_mask(self, image_rgb, threshold=0.3):
-        """获取人物分割遮罩"""
-        # 使用YOLOv8进行推理
-        results = self.model(image_rgb, device=self.device, conf=self.confidence_threshold, verbose=False)
-
-        if len(results) == 0 or results[0].masks is None:
-            return None
-
-        height, width = image_rgb.shape[:2]
-        person_mask = np.zeros((height, width), dtype=np.uint8)
-
-        # 获取第一个结果（假设单张图片）
-        result = results[0]
-
-        # 检查是否有检测到的人物
-        if result.boxes is not None and len(result.boxes) > 0:
-            # 获取所有检测框的类别
-            class_ids = result.boxes.cls.cpu().numpy()
-            # 获取所有检测框的置信度
-            confidences = result.boxes.conf.cpu().numpy()
-
-            # 筛选出人物类别
-            person_indices = [i for i, class_id in enumerate(class_ids)
-                              if class_id == self.person_class_id and confidences[i] >= self.confidence_threshold]
-
-            # 如果有检测到的人物，合并所有人物掩码
-            if person_indices and result.masks is not None:
-                for idx in person_indices:
-                    # 获取单个实例的掩码
-                    instance_mask = result.masks.data[idx].cpu().numpy()
-
-                    # 调整掩码尺寸匹配原图
-                    instance_mask = cv2.resize(instance_mask, (width, height))
-
-                    # 应用阈值并合并到总掩码中
-                    instance_mask_binary = (instance_mask > threshold).astype(np.uint8) * 255
-                    person_mask = cv2.bitwise_or(person_mask, instance_mask_binary)
-
-        return person_mask
-
-    def get_face_mask(self, image_rgb):
-        """
-        获取脸部遮罩
-        注意：YOLOv8分割模型不直接提供脸部分割，这里使用人物检测框的上半部分作为近似脸部区域
-        或者可以结合其他面部检测方法
-        """
-        height, width = image_rgb.shape[:2]
-        face_mask = np.zeros((height, width), dtype=np.uint8)
-
-        # 使用YOLOv8进行推理
-        results = self.model(image_rgb, device=self.device, conf=self.confidence_threshold, verbose=False)
-
-        if len(results) == 0 or results[0].boxes is None:
-            return face_mask
-
-        result = results[0]
-
-        # 获取所有检测框的类别
-        class_ids = result.boxes.cls.cpu().numpy()
-        # 获取所有检测框的坐标
-        boxes = result.boxes.xyxy.cpu().numpy()
-
-        # 筛选出人物类别
-        person_indices = [i for i, class_id in enumerate(class_ids)
-                          if class_id == self.person_class_id]
-
-        # 为每个人物创建近似脸部区域
-        for idx in person_indices:
-            x1, y1, x2, y2 = boxes[idx].astype(int)
-
-            # 计算人物高度
-            person_height = y2 - y1
-
-            # 定义脸部区域为人物框的上半部分（可根据需要调整比例）
-            face_ratio = 0.4  # 脸部占人物高度的比例
-            face_height = int(person_height * face_ratio)
-
-            # 计算脸部区域坐标
-            face_x1 = x1
-            face_y1 = y1
-            face_x2 = x2
-            face_y2 = y1 + face_height
-
-            # 确保坐标在图像范围内
-            face_x1 = max(0, face_x1)
-            face_y1 = max(0, face_y1)
-            face_x2 = min(width, face_x2)
-            face_y2 = min(height, face_y2)
-
-            # 在脸部掩码上绘制矩形区域
-            cv2.rectangle(face_mask, (face_x1, face_y1), (face_x2, face_y2), 255, -1)
-
-        return face_mask
-
-    def get_detailed_face_mask(self, image_rgb, face_detector=None):
-        """
-        获取更精确的脸部遮罩
-        可以结合其他面部检测方法（如MediaPipe）来提高精度
-
-        参数:
-        face_detector: 可选的外部面部检测器
-        """
-        # 如果没有提供外部面部检测器，使用默认的近似方法
-        if face_detector is None:
-            return self.get_face_mask(image_rgb)
-
-        # 否则使用外部面部检测器
-        height, width = image_rgb.shape[:2]
-        face_mask = np.zeros((height, width), dtype=np.uint8)
-
-        # 这里可以集成MediaPipe或其他面部检测方法
-        # 例如，如果face_detector是MediaPipeFaceMesh实例:
-        # results = face_detector.process(image_rgb)
-        # 然后根据面部关键点生成掩码
-
-        # 示例代码（需要根据实际使用的面部检测器调整）
-        try:
-            # 假设face_detector有process方法，返回面部关键点
-            results = face_detector.process(image_rgb)
-            if hasattr(results, 'multi_face_landmarks') and results.multi_face_landmarks:
-                for face_landmarks in results.multi_face_landmarks:
-                    landmarks = []
-                    for landmark in face_landmarks.landmark:
-                        x = int(landmark.x * width)
-                        y = int(landmark.y * height)
-                        landmarks.append((x, y))
-
-                    # 使用凸包生成脸部遮罩
-                    hull = cv2.convexHull(np.array(landmarks))
-                    cv2.fillConvexPoly(face_mask, hull, 255)
-        except Exception as e:
-            print(f"使用外部面部检测器失败: {e}, 回退到默认方法")
-            face_mask = self.get_face_mask(image_rgb)
-
-        return face_mask
-
-    def release(self):
-        """释放资源"""
-        # YOLOv8模型通常不需要手动释放，但可以清理GPU内存
-        if hasattr(self, 'model'):
-            del self.model
-            if torch.cuda.is_available():
-                torch.cuda.empty_cache()
-class HybridSegmenter:
-    """混合分割器，可以组合使用YOLOv8和MediaPipe"""
-
-    def __init__(self, yolo_model_path='yolov8n-seg.pt', use_mediapipe_face=True):
-        self.yolo_segmenter = YOLOv8Segmenter(yolo_model_path)
-        self.use_mediapipe_face = use_mediapipe_face
-
-        if use_mediapipe_face:
-            # 初始化MediaPipe面部检测
-            import mediapipe as mp
-            mp_face_mesh = mp.solutions.face_mesh
-            self.face_mesh = mp_face_mesh.FaceMesh(
-                static_image_mode=False,
-                max_num_faces=1,
-                min_detection_confidence=0.1
-            )
-        else:
-            self.face_mesh = None
-
-    def get_person_mask(self, image_rgb, threshold=0.3):
-        return self.yolo_segmenter.get_person_mask(image_rgb, threshold)
-
-    def get_face_mask(self, image_rgb):
-        if self.use_mediapipe_face and self.face_mesh is not None:
-            return self.yolo_segmenter.get_detailed_face_mask(image_rgb, self.face_mesh)
-        else:
-            return self.yolo_segmenter.get_face_mask(image_rgb)
-
-    def release(self):
-        self.yolo_segmenter.release()
-        if self.face_mesh is not None:
-            self.face_mesh.close()
 def process_frame_with_sam2(
     predictor,
     inference_state,
@@ -344,7 +106,7 @@ def process_frame_with_sam2(
     if mask.ndim == 3:
         mask = mask.squeeze(0)
     return mask.astype(np.uint8) * 255
-def process_video_with_sam2(video_path) -> np.ndarray:
+def process_video_with_single_point(video_path) -> np.ndarray:
     """
     逐帧处理函数，返回当前帧的蒙版。
     
@@ -384,6 +146,108 @@ def process_video_with_sam2(video_path) -> np.ndarray:
             out_obj_id: (out_mask_logits[i] > 0.0).cpu().numpy()
             for i, out_obj_id in enumerate(out_obj_ids)
         }
+    return video_segments
+def process_video_with_dynamic_points(video_path, json_folder="D:\\AI_Graph\\视频\\输入\\sam坐标"):
+    """
+    根据JSON文件中定义的帧号和点坐标信息，动态更新跟踪点并处理视频
+    
+    Args:
+        video_path: 视频文件路径
+        json_folder: 存储JSON文件的目录
+        
+    Returns:
+        video_segments: 包含所有帧分割结果的字典
+    """
+    # 创建临时目录
+    temp_dir = "temp"
+    os.makedirs(temp_dir, exist_ok=True)
+    
+    # 读取视频
+    cap = cv2.VideoCapture(video_path)
+    if not cap.isOpened():
+        raise ValueError(f"无法打开视频文件: {video_path}")
+    
+    # 读取JSON文件
+    video_name = os.path.splitext(os.path.basename(video_path))[0]
+    json_path = os.path.join(json_folder, f"{video_name}.json")
+    
+    if not os.path.exists(json_path):
+        raise FileNotFoundError(f"JSON文件未找到: {json_path}")
+    
+    with open(json_path, 'r') as f:
+        points_data = json.load(f)
+    
+    # 将字符串键转换为整数并排序
+    frame_numbers = sorted([int(k) for k in points_data.keys()])
+    # 提取所有帧到临时目录
+    frame_dir = os.path.join(temp_dir, "all_frames")
+    os.makedirs(frame_dir, exist_ok=True)
+    
+    frame_count = 0
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            break
+        cv2.imwrite(os.path.join(frame_dir, f"{frame_count:06d}.jpg"), frame)
+        frame_count += 1
+    cap.release()
+    
+    video_segments = {}
+    
+    # 处理每个关键帧区间
+    for i, frame_idx in enumerate(frame_numbers):
+        # 获取当前帧的点坐标
+        frame_data = points_data[str(frame_idx)]
+        positive_points = [tuple(p) for p in frame_data.get("positive", [])]
+        negative_points = [tuple(p) for p in frame_data.get("negative", [])]
+        
+        # 准备输入数据
+        points = np.array(positive_points + negative_points, dtype=np.float32)
+        labels = np.array([1] * len(positive_points) + [0] * len(negative_points), dtype=np.int32)
+        
+        # 创建当前区间的临时目录
+        interval_dir = os.path.join(temp_dir, f"interval_{i}")
+        os.makedirs(interval_dir, exist_ok=True)
+        
+        # 确定处理区间
+        start_frame = frame_idx
+        if i < len(frame_numbers) - 1:
+            end_frame = frame_numbers[i+1] - 1
+        else:
+            end_frame = frame_count - 1
+            
+        # 复制当前区间的帧到临时目录
+        for f in range(start_frame, end_frame + 1):
+            src = os.path.join(frame_dir, f"{f:06d}.jpg")
+            dst = os.path.join(interval_dir, f"{f:06d}.jpg")
+            shutil.copy(src, dst)
+        
+        print(f"处理区间 {i}: 帧 {start_frame} 到 {end_frame}")
+        print(f"在帧 {frame_idx} 添加 {len(positive_points)} 个正样本点和 {len(negative_points)} 个负样本点")
+        
+        # 初始化SAM状态
+        inference_state = predictor.init_state(video_path=interval_dir)
+        
+        # 添加新的跟踪点
+        _, _, out_mask_logits = predictor.add_new_points_or_box(
+            inference_state=inference_state,
+            frame_idx=0,  # 总是从区间第一帧开始
+            obj_id=i,
+            points=points,
+            labels=labels,
+        )
+        
+        # 处理当前区间
+        for out_frame_idx, out_obj_ids, out_mask_logits in predictor.propagate_in_video(inference_state):
+            actual_frame = start_frame + out_frame_idx  # 转换为原始帧号
+            video_segments[actual_frame] = {
+                out_obj_id: (out_mask_logits[i] > 0.0).cpu().numpy()
+                for i, out_obj_id in enumerate(out_obj_ids)
+            }
+    
+    # 清理临时文件
+    shutil.rmtree(temp_dir)
+    
     return video_segments
 def combine_and_plot_masks(video_segments, frame_index):
     """
@@ -430,8 +294,6 @@ def load_points_from_json(video_path, json_folder = "D:\AI_Graph\视频\输入\s
     positive_points: 正点列表
     negative_points: 负点列表
     """
-    import json
-    import os
 
     # 从视频路径中提取文件名（不含扩展名）
     video_name = os.path.splitext(os.path.basename(video_path))[0]
@@ -455,6 +317,7 @@ def load_points_from_json(video_path, json_folder = "D:\AI_Graph\视频\输入\s
     negative_points = data.get("negative", [])
 
     return positive_points, negative_points
+
 fram4samPoint_global = None
 def click_event(event, x, y, flags, param):
     """
@@ -473,6 +336,7 @@ def click_event(event, x, y, flags, param):
         negative_points.append((x, y))
         cv2.circle(fram4samPoint_global, (x, y), 5, (0, 0, 255), -1)  # Red for negative points
         cv2.imshow('First Frame', fram4samPoint_global)
+
 def fill_above_min_y(face_mask):
     """
     将面部所在位置以上的所有像素点涂白
@@ -639,8 +503,6 @@ def process_single_video(video_path, output_root, video_count, display = False):
     # 初始化分割器
     if USE_MEDIAPIPE:
         segmenter = MediaPipeSegmenter(model_selection=0, face_detection_confidence=FACE_THRESHOLD)
-    if USE_YOLO:
-        segmenter = YOLOv8Segmenter(model_path="D:\\AI_Graph\\视频\\遮罩视频\\model\\yolov8x-seg.pt", confidence_threshold=0.5)
 
     cap = cv2.VideoCapture(video_path)
     fps = cap.get(cv2.CAP_PROP_FPS)
@@ -682,8 +544,8 @@ def process_single_video(video_path, output_root, video_count, display = False):
         # predictor.reset_state(inference_state) # 重置跟踪
 
         # 获取所有帧的sam处理结果
-        video_segments = process_video_with_sam2(video_path)
-    
+        # video_segments = process_video_with_single_point(video_path)
+        video_segments = process_video_with_dynamic_points(video_path)
     try:
         
         # 处理所有帧
@@ -782,7 +644,6 @@ def process_videos(input_dir, output_root, start_index = 0):
         print(f"输入路径不存在: {input_dir}")
 
 
-
 positive_points = []
 negative_points = []
 # 可调节参数
@@ -803,14 +664,13 @@ SKIN_DETECT = False # 去除皮肤部分
 
 FACE_DILATION = 0
 FACE_SQUARE = 32
-BODY_DILATION = 64
-BODY_SQUARE = 64
+BODY_DILATION = 0
+BODY_SQUARE = 0
 
 THRESHOLD = 0.1         # 身体阈值
 FACE_THRESHOLD = 0.5    # 面部阈值
 # 选择使用的分割器类型
 USE_MEDIAPIPE = True  # 设置为False可以切换为其他分割器（如YOLO）
-USE_YOLO = False
 
 if SAM_FLAG:
     # 初始化 SAM2 预测器
