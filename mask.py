@@ -363,12 +363,12 @@ def process_video_with_sam2(video_path) -> np.ndarray:
     # 从frame_idx帧 增加跟踪点
     _, _, out_mask_logits = predictor.add_new_points_or_box(
         inference_state=inference_state,
-        frame_idx=DrawPointFrame,
+        frame_idx=StartFrame,
         obj_id=1,
         points=points,
         labels=labels,
     )
-    # 双击扩大识别范围
+    # 双击缩小识别范围
     # _, _, out_mask_logits = predictor.add_new_points_or_box(
     #     inference_state=inference_state,
     #     frame_idx=0,
@@ -661,7 +661,7 @@ def process_single_video(video_path, output_root, video_count, display = False):
             # 窗口点选
             global fram4samPoint_global, positive_points, negative_points
             cap4samPoint = cv2.VideoCapture(video_path)
-            cap4samPoint.set(cv2.CAP_PROP_POS_FRAMES, DrawPointFrame)
+            cap4samPoint.set(cv2.CAP_PROP_POS_FRAMES, StartFrame)
             ret, fram4samPoint_global = cap4samPoint.read()
             cv2.imshow('First Frame', fram4samPoint_global)
             cv2.setMouseCallback('First Frame', click_event)
@@ -687,7 +687,7 @@ def process_single_video(video_path, output_root, video_count, display = False):
     try:
         
         # 处理所有帧
-        for frame_count in tqdm(range(DrawPointFrame, frames), desc=f"Processing {video_name}", unit="frame"):
+        for frame_count in tqdm(range(StartFrame, frames), desc=f"Processing {video_name}", unit="frame"):
             ret, frame = cap.read()
 
             if not ret:
@@ -732,7 +732,7 @@ def process_single_video(video_path, output_root, video_count, display = False):
 
             # 输出视频帧
             final_output = frame.copy()
-            final_output[person_mask == 255] = 0
+            final_output[body_mask == 255] = 0
             # out_person.write(processed_person_mask)
             # out_face.write(face_mask)
             out_body.write(body_mask)
@@ -786,25 +786,25 @@ def process_videos(input_dir, output_root, start_index = 0):
 positive_points = []
 negative_points = []
 # 可调节参数
-model_cfg = "configs\\sam2.1\\sam2.1_hiera_b+.yaml"
-sam2_checkpoint = "checkpoints\\sam2.1_hiera_base_plus.pt"
+model_cfg = "configs\\sam2.1\\sam2.1_hiera_t.yaml"
+sam2_checkpoint = "checkpoints\\sam2.1_hiera_tiny.pt"
 
 # True False
 FLAG_100FRAMS = True
 DILATION_KERNEL_SIZE = 0  # 膨胀核大小，可调节膨胀程度
-SQUARE_SIZE = 16  # 方块大小，可调节方块化程度
-SAM_FLAG = True   # 是否使用sam识别主体
-SAM_POINT_CLICK = True  # 是否使用sam点选
 
-DrawPointFrame = 0  # 选择视频的第几帧画点
+SAM_FLAG = True   # 是否使用sam识别主体
+SAM_POINT_CLICK = False  # 是否使用sam点选
+
+StartFrame = 0  # 选择视频的第几帧画点
 DRAW_DOWN = False  # 将下1/3区域全部图黑
 UP_CLEAR = False    # 将头部上方清空
 SKIN_DETECT = False # 去除皮肤部分
 
 FACE_DILATION = 0
 FACE_SQUARE = 32
-BODY_DILATION = 0
-BODY_SQUARE = 0
+BODY_DILATION = 64
+BODY_SQUARE = 64
 
 THRESHOLD = 0.1         # 身体阈值
 FACE_THRESHOLD = 0.5    # 面部阈值
@@ -823,8 +823,10 @@ if SAM_FLAG:
     predictor = build_sam2_video_predictor(model_cfg, sam2_checkpoint, device=device)
 
 if __name__ == "__main__":
-    name = "好久不见呀 想我了吗 甘雨 cos 原神 fyp - 抖音"
-    input_dir = f"D:\AI_Graph\视频\输入\原视频_16fps\{name}.mp4"  # 可以是单个视频路径，也可以是文件夹路径
+    name = "不许笑 胜利女神新的希望 马斯特 泳装 - 抖音"
+    # input_dir = f"D:\AI_Graph\视频\输入\原视频_16fps"  # 可以是单个视频路径，也可以是文件夹路径
+    # input_dir = f"D:\AI_Graph\视频\输入\原视频_16fps\{name}.mp4"  # 可以是单个视频路径，也可以是文件夹路径
+    input_dir = "D:\AI_Graph\视频\输入\MultiScene.mp4"
     output_root = r"D:\AI_Graph\视频\输入\输入视频整合"
     
     print("\n\n\n----------------------------------------------------------------------")
