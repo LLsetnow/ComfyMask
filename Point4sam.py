@@ -180,7 +180,7 @@ def mark_points_on_video(video_path: str, json_dir: str, output_dir: str):
     print(f"Marked image saved to {output_path}")
 
 def main():
-    video_path = r"D:\AI_Graph\1.mp4"
+    video_path = r"D:\AI_Graph\视频\输入\MultiScene.mp4"
     json_dir = r"D:\AI_Graph\视频\输入\sam坐标"
     output_dir = r"D:\AI_Graph\视频\输入\sam坐标"
     process_videos(video_path, json_dir) 
