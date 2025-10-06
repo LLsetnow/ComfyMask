@@ -88,11 +88,19 @@ class SamSegmenter:
         self.predictor = build_sam2_video_predictor(model_cfg, sam2_checkpoint, device=device)
         self.video_path = video_path
         self.json_folder = json_folder
+        self.reset()
+        self.frame = None
+        self.scale_factor = 1.0
+    
+    def reset(self):
+        """重置临时变量"""
         self.positive_points = []
         self.negative_points = []
         self.video_segments = {}
-        self.frame = None
-        self.scale_factor = 1.0
+        temp_dir = "temp"
+
+        if os.path.exists(temp_dir):
+            shutil.rmtree(temp_dir)
 
     def process_video_with_single_point(self):
         """
@@ -104,26 +112,35 @@ class SamSegmenter:
         Returns:
             video_segments: 包含所有帧分割结果的字典
         """
+        # 重置临时变量
+        self.reset()
+        
         # 获取样本点
         if SAM_POINT_CLICK:
             # 窗口点选
             global fram4samPoint_global, positive_points, negative_points
             cap4samPoint = cv2.VideoCapture(self.video_path)
-            cap4samPoint.set(cv2.CAP_PROP_POS_FRAMES)
-            ret, fram4samPoint_global = cap4samPoint.read()
-            cv2.imshow('First Frame', fram4samPoint_global)
-            cv2.setMouseCallback('First Frame', click_event)
+            try:
+                cap4samPoint.set(cv2.CAP_PROP_POS_FRAMES)
+                ret, fram4samPoint_global = cap4samPoint.read()
+                if not ret:
+                    raise ValueError("无法读取视频帧")
+                
+                cv2.imshow('First Frame', fram4samPoint_global)
+                cv2.setMouseCallback('First Frame', click_event)
 
-            while True:
-                key = cv2.waitKey(1) & 0xFF
-                if key == ord('q'):
-                    break
-            cv2.destroyAllWindows()
-            self.positive_points = positive_points
-            self.negative_points = negative_points
-            print(f"正样本点{len(self.positive_points)}个，负样本点{len(self.negative_points)}个")
-            print(f"正样本点{self.positive_points}")
-            print(f"负样本点{self.negative_points}")
+                while True:
+                    key = cv2.waitKey(1) & 0xFF
+                    if key == ord('q'):
+                        break
+                cv2.destroyAllWindows()
+                self.positive_points = positive_points
+                self.negative_points = negative_points
+                print(f"正样本点{len(self.positive_points)}个，负样本点{len(self.negative_points)}个")
+                print(f"正样本点{self.positive_points}")
+                print(f"负样本点{self.negative_points}")
+            finally:
+                cap4samPoint.release()
         else:
             # 从JSON文件读取
             self.load_points_from_json()         
@@ -157,100 +174,105 @@ class SamSegmenter:
         根据JSON文件动态更新跟踪点处理视频
         
         Args:
-            video_path: 视频文件路径
-            json_folder: JSON文件目录
             
         Returns:
             frame_numbers[0]: 首个区间首帧编号
         """
+        # 重置临时变量
+        self.reset()
+        
         # 创建临时目录
         temp_dir = "temp"
         os.makedirs(temp_dir, exist_ok=True)
         
-        # 读取视频
-        cap = cv2.VideoCapture(self.video_path)
-        if not cap.isOpened():
-            raise ValueError(f"无法打开视频文件: {self.video_path}")
-            
-        # 读取JSON文件
-        video_name = os.path.splitext(os.path.basename(self.video_path))[0]
-        json_path = os.path.join(self.json_folder, f"{video_name}.json")
-        
-        if not os.path.exists(json_path):
-            raise FileNotFoundError(f"JSON文件未找到: {json_path}")
-            
-        with open(json_path, 'r') as f:
-            points_data = json.load(f)
-            
-        # 提取所有帧
-        frame_dir = os.path.join(temp_dir, "all_frames")
-        os.makedirs(frame_dir, exist_ok=True)
-        
-        frame_count = 0
-        while True:
-            ret, frame = cap.read()
-            if not ret:
-                break
-            cv2.imwrite(os.path.join(frame_dir, f"{frame_count:06d}.jpg"), frame)
-            frame_count += 1
-        cap.release()
-        
-        frame_numbers = sorted([int(k) for k in points_data.keys()])
-        
-        # 处理每个关键帧区间
-        for i, frame_idx in enumerate(frame_numbers):
-            # 创建区间目录
-            interval_dir = os.path.join(temp_dir, f"interval_{i}")
-            os.makedirs(interval_dir, exist_ok=True)
-            
-            # 确定区间范围
-            start_frame = frame_idx
-            end_frame = frame_numbers[i+1]-1 if i < len(frame_numbers)-1 else frame_count-1
-
-            
-            # 复制帧到区间目录
-            for f in range(start_frame, end_frame+1):
-                src = os.path.join(frame_dir, f"{f:06d}.jpg")
-                dst = os.path.join(interval_dir, f"{f:06d}.jpg")
-                shutil.copy(src, dst)
+        try:
+            # 读取视频
+            cap = cv2.VideoCapture(self.video_path)
+            if not cap.isOpened():
+                raise ValueError(f"无法打开视频文件: {self.video_path}")
                 
-            # 加载点坐标
-            frame_data = points_data[str(frame_idx)]
-            positive_points = [tuple(p) for p in frame_data.get("positive", [])]
-            negative_points = [tuple(p) for p in frame_data.get("negative", [])]
- 
-            box = [p for p in frame_data.get("box", [])]
-
-            # 打印点坐标和box
-            print(f"positive_points: {positive_points}")
-            print(f"negative_points: {negative_points}")
-            print(f"box: {box}")
-            print(f"处理区间 {i}: 帧 {start_frame} - {end_frame}  ")
+            # 读取JSON文件
+            video_name = os.path.splitext(os.path.basename(self.video_path))[0]
+            json_path = os.path.join(self.json_folder, f"{video_name}.json")
             
-            points = np.array(positive_points + negative_points, dtype=np.float32)
-            labels = np.array([1]*len(positive_points) + [0]*len(negative_points), dtype=np.int32)
-            box = np.array(box, dtype=np.float32)
-            
-            # 初始化预测状态
-            inference_state = self.predictor.init_state(video_path=interval_dir)
-
-            _, _, out_mask_logits = self.predictor.add_new_points_or_box(
-                inference_state=inference_state,
-                frame_idx=0,
-                obj_id=i,
-                points=points,
-                labels=labels,
-                box=box,
-            )
-            
-            for out_frame_idx, out_obj_ids, out_mask_logits in self.predictor.propagate_in_video(inference_state):
-                actual_frame = start_frame + out_frame_idx
-                self.video_segments[actual_frame] = {
-                    out_obj_id: (out_mask_logits[i] > 0.0).cpu().numpy()
-                    for i, out_obj_id in enumerate(out_obj_ids)
-                }
+            if not os.path.exists(json_path):
+                raise FileNotFoundError(f"JSON文件未找到: {json_path}")
                 
-        shutil.rmtree(temp_dir)
+            with open(json_path, 'r') as f:
+                points_data = json.load(f)
+                
+            # 提取所有帧
+            frame_dir = os.path.join(temp_dir, "all_frames")
+            os.makedirs(frame_dir, exist_ok=True)
+            
+            frame_count = 0
+            while True:
+                ret, frame = cap.read()
+                if not ret:
+                    break
+                cv2.imwrite(os.path.join(frame_dir, f"{frame_count:06d}.jpg"), frame)
+                frame_count += 1
+            cap.release()
+            
+            frame_numbers = sorted([int(k) for k in points_data.keys()])
+            
+            # 处理每个关键帧区间
+            for i, frame_idx in enumerate(frame_numbers):
+                # 创建区间目录
+                interval_dir = os.path.join(temp_dir, f"interval_{i}")
+                os.makedirs(interval_dir, exist_ok=True)
+                
+                # 确定区间范围
+                start_frame = frame_idx
+                end_frame = frame_numbers[i+1]-1 if i < len(frame_numbers)-1 else frame_count-1
+
+                
+                # 复制帧到区间目录
+                for f in range(start_frame, end_frame+1):
+                    src = os.path.join(frame_dir, f"{f:06d}.jpg")
+                    dst = os.path.join(interval_dir, f"{f:06d}.jpg")
+                    shutil.copy(src, dst)
+                    
+                # 加载点坐标
+                frame_data = points_data[str(frame_idx)]
+                positive_points = [tuple(p) for p in frame_data.get("positive", [])]
+                negative_points = [tuple(p) for p in frame_data.get("negative", [])]
+     
+                box = [p for p in frame_data.get("box", [])]
+
+                # 打印点坐标和box
+                print(f"positive_points: {positive_points}")
+                print(f"negative_points: {negative_points}")
+                print(f"box: {box}")
+                print(f"处理区间 {i}: 帧 {start_frame} - {end_frame}  ")
+                
+                points = np.array(positive_points + negative_points, dtype=np.float32)
+                labels = np.array([1]*len(positive_points) + [0]*len(negative_points), dtype=np.int32)
+                box = np.array(box, dtype=np.float32)
+                
+                # 初始化预测状态
+                inference_state = self.predictor.init_state(video_path=interval_dir)
+
+                _, _, out_mask_logits = self.predictor.add_new_points_or_box(
+                    inference_state=inference_state,
+                    frame_idx=0,
+                    obj_id=i,
+                    points=points,
+                    labels=labels,
+                    box=box,
+                )
+                
+                for out_frame_idx, out_obj_ids, out_mask_logits in self.predictor.propagate_in_video(inference_state):
+                    actual_frame = start_frame + out_frame_idx
+                    self.video_segments[actual_frame] = {
+                        out_obj_id: (out_mask_logits[i] > 0.0).cpu().numpy()
+                        for i, out_obj_id in enumerate(out_obj_ids)
+                    }
+        finally:
+            # 确保临时目录被清理
+            pass
+
+                
         return frame_numbers[0]
     def combine_and_plot_masks(self, frame_index):
         """
@@ -285,7 +307,6 @@ class SamSegmenter:
             print(f"Error: Combined mask shape {combined_mask.shape} is invalid.")
             return
         return combined_mask
-
     def load_points_from_json(self):
         """
         从 json_folder文件夹内读取同名的json文件, 并从文件中读取正负点数据
@@ -582,7 +603,6 @@ def process_single_video(video_path, json_folder, output_root, video_count, disp
                 if cv2.waitKey(1) & 0xFF == ord('q'):
                     break
 
-
     finally:
         cap.release()
         # out_person.release()
@@ -603,11 +623,30 @@ def process_videos(input_dir, json_folder, output_root, start_index = 0):
         else:
             print(f"输入文件不是视频: {input_dir}")
     elif os.path.isdir(input_dir):
-        video_files = [f for f in os.listdir(input_dir) if f.lower().endswith((".mp4", ".avi", ".mov", ".mkv"))]
+        # 创建进度文件
+        progress_file = os.path.join(input_dir, "progress.txt")
+        if not os.path.exists(progress_file):
+            with open(progress_file, "w", encoding="utf-8") as f:
+                f.write("")
+                progress_files = []
+                video_count = 0
+        else:
+            with open(progress_file, "r", encoding="utf-8") as f:
+                progress_files = f.readlines()
+                progress_files = [f.strip() for f in progress_files]
+                video_count = len(progress_files)
+        
+        print(f"输出起始序列号: {video_count}")
+        # 获取所有未处理的视频文件
+        video_files = [f for f in os.listdir(input_dir) if f.lower().endswith((".mp4", ".avi", ".mov", ".mkv")) and f not in progress_files]
+        print(f"还有 {len(video_files)} 个视频需要处理 ")
         for filename in tqdm(video_files, desc="Processing all videos", unit="video"):
             video_path = os.path.join(input_dir, filename)
             print(f"蒙版合成: {video_path}")
             process_single_video(video_path, json_folder, output_root, video_count, False)
+            # 写入进度文件
+            with open(progress_file, "a", encoding="utf-8") as f:
+                f.write(f"{filename}\n")
             video_count += 1
     else:
         print(f"输入路径不存在: {input_dir}")
@@ -660,16 +699,16 @@ FACE_THRESHOLD = 0.5    # 面部阈值
 USE_MEDIAPIPE = True  # 设置为False可以切换为其他分割器
 
 def main():
-    name = "好久不见呀 想我了吗 甘雨 cos 原神 fyp - 抖音"
+    name = "听不清 根本听不清 蔚蓝档案 cos 萝莉 户外舞蹈 甜妹 - 抖音"
     input_dir = f"D:\AI_Graph\输入\原视频_16fps"  # 可以是单个视频路径，也可以是文件夹路径
-    # input_dir = f"D:\AI_Graph\输入\原视频_16fps\{name}.mp4"  # 可以是单个视频路径，也可以是文件夹路径
-    # input_dir = "D:\AI_Graph\输入\MultiScene.mp4"
+    input_dir = "D:\AI_Graph\输入\MultiScene.mp4"
+    input_dir = f"D:\AI_Graph\输入\原视频_16fps\{name}.mp4"  # 可以是单个视频路径，也可以是文件夹路径
     json_folder = "D:\AI_Graph\输入\sam坐标"
     output_root = r"D:\AI_Graph\输入\输入视频整合"
     
     print("\n\n\n----------------------------------------------------------------------")
     print(f"将{input_dir}生成为遮罩, 输出到{output_root}")
-    process_videos(input_dir, json_folder, output_root, start_index=5)
+    process_videos(input_dir, json_folder, output_root, start_index=2)
 
 if __name__ == "__main__":
     main()
