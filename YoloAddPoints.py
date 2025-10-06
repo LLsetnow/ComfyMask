@@ -78,6 +78,9 @@ class YOLOProcessor:
                     face_down_y = y2
                     current_frame_points["negative"].append((center_x, center_y))
                     cv2.rectangle(frame, (int(x1), int(y1)), (int(x2), int(y2)), (255, 0, 0), 2)
+                else:
+                    current_frame_points["positive"].append((0, 0))
+                    print(f"没有检测到人脸: {video_name}_{frame_count}")
 
             # 检测人体
             body_results = self.model_body(frame, verbose=False)
@@ -90,6 +93,9 @@ class YOLOProcessor:
                     y1 = face_down_y
                     current_box = (x1, y1, x2, y2)
                     cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
+                else:
+                    current_box = (0, 0, 0, 0)
+                    print(f"没有检测到人体: {video_name}_{frame_count}")
             
             frame_data[frame_count] = {
                 "positive": current_frame_points["positive"],
@@ -122,7 +128,9 @@ class YOLOProcessor:
         """
         if os.path.isfile(self.video_path):
             self.process_video(self.video_path)
-            self.output_json_path = os.path.join(self.output_json_dir, f"{self.video_name}.json")
+            base_name = os.path.basename(self.video_path)
+            video_name, _ = os.path.splitext(base_name)
+            self.output_json_path = os.path.join(self.output_json_dir, f"{video_name}.json")
             self.save_results()
             print(f"检测结果已保存到: {self.output_json_path}")
         elif os.path.isdir(self.video_path):
