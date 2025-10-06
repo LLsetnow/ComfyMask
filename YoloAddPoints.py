@@ -1,5 +1,6 @@
 # 加载yolo10m模型，为视频添加检测点
 from tabnanny import verbose
+from unittest import TestResult
 import cv2
 import json
 import os
@@ -67,6 +68,9 @@ class YOLOProcessor:
             current_frame_points = {"positive": [], "negative": []}
             current_box = None
 
+            flag_face = True
+            flag_body = True
+
             # 检测人脸
             face_results = self.model_face(frame, verbose=False)
             for result in face_results:
@@ -79,23 +83,32 @@ class YOLOProcessor:
                     current_frame_points["negative"].append((center_x, center_y))
                     cv2.rectangle(frame, (int(x1), int(y1)), (int(x2), int(y2)), (255, 0, 0), 2)
                 else:
+                    flag_face = False
                     current_frame_points["positive"].append((0, 0))
                     print(f"没有检测到人脸: {video_name}_{frame_count}")
 
             # 检测人体
             body_results = self.model_body(frame, verbose=False)
+            max_conf = -1
+            best_box = None
             for result in body_results:
                 boxes = result.boxes.xyxy.cpu().numpy()  # 获取边界框坐标
+                confidences = result.boxes.conf.cpu().numpy()  # 获取置信度
                 if len(boxes) > 0:
-                    # 主体框 - 人脸框 = 身体框
-                    box = [int(coord) for coord in boxes[0].tolist()]  # 取第一个检测到的人体并转换为整数
-                    x1, y1, x2, y2 = box
+                    for i, box in enumerate(boxes):
+                        if confidences[i] > max_conf:
+                            max_conf = confidences[i]
+                            best_box = [int(coord) for coord in box.tolist()]
+            if best_box is not None:
+                x1, y1, x2, y2 = best_box
+                if flag_face:
                     y1 = face_down_y
-                    current_box = (x1, y1, x2, y2)
-                    cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
-                else:
-                    current_box = (0, 0, 0, 0)
-                    print(f"没有检测到人体: {video_name}_{frame_count}")
+                current_box = (x1, y1, x2, y2)
+                cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
+            else:
+                flag_body = False
+                current_box = (0, 0, 0, 0)
+                print(f"没有检测到人体: {video_name}_{frame_count}")
             
             frame_data[frame_count] = {
                 "positive": current_frame_points["positive"],
@@ -149,12 +162,14 @@ class YOLOProcessor:
 
 if __name__ == "__main__":
     # 示例用法
+    name = "我不是gay 胸肌 - 抖音"
+    video_path = f"D:\AI_Graph\输入\原视频_16fps\{name}.mp4"  # 替换为实际视频路径
     video_path = r"D:\AI_Graph\输入\原视频_16fps"  # 替换为实际视频路径
     output_json_dir = "D:\AI_Graph\输入\sam坐标"  # 替换为输出JSON文件路径
     body_model_path = r"D:\AI_Graph\tools\checkpoints\yolo11l.pt"  # 替换为人体检测模型路径
     face_model_path = r"D:\AI_Graph\tools\checkpoints\face_yolov8m.pt"  # 替换为人脸检测模型路径
-    frame_interval = 1000  # 每隔n帧处理一帧
-    frame_sequence = [0]  # 或指定帧序列
+    frame_interval = 48  # 每隔n帧处理一帧
+    frame_sequence = [0, 5, 10, 40, 70, 100, 150, 200, 250, 300]  # 或指定帧序列
 
     processor = YOLOProcessor(video_path, output_json_dir, body_model_path, face_model_path, 
                             frame_interval, frame_sequence)

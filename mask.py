@@ -597,14 +597,15 @@ def process_single_video(video_path, json_folder, output_root, video_count, disp
         start_frame = sam_segmenter.process_video_with_dynamic_points()
     try:
         mask_tool = MaskProcessor()
-        if start_frame > 0:
+        if SAM_FLAG and start_frame > 0:
             for frame_count in range(start_frame):
                 ret, frame = cap.read()
                 body_mask = np.zeros_like(frame)
                 out_body.write(body_mask)
                 out_background.write(frame)
                 out_pose.write(segmenter.detect_pose_and_hands(frame))
-
+        else:
+            start_frame = 0
         # 处理所有帧
         for frame_count in tqdm(range(start_frame, frames), desc=f"Processing {video_name}", unit="frame"):
             ret, frame = cap.read()
@@ -769,7 +770,7 @@ FACE_THRESHOLD = 0.5    # 面部阈值
 USE_MEDIAPIPE = True  # 设置为False可以切换为其他分割器
 
 def main():
-    name = "实则内心非常慌乱 胜利女神nikke cos 萝莉 啦啦队 妮姬 - 抖音"
+    name = "我不是gay 胸肌 - 抖音"
     input_dir = "D:\AI_Graph\输入\MultiScene.mp4"
     input_dir = f"D:\AI_Graph\输入\原视频_16fps"  # 可以是单个视频路径，也可以是文件夹路径
     input_dir = f"D:\AI_Graph\输入\原视频_16fps\{name}.mp4"  # 可以是单个视频路径，也可以是文件夹路径
@@ -778,7 +779,7 @@ def main():
     
     print("\n\n\n----------------------------------------------------------------------")
     print(f"将{input_dir}生成为遮罩, 输出到{output_root}")
-    process_videos(input_dir, json_folder, output_root, start_index=3)
+    process_videos(input_dir, json_folder, output_root, start_index=100)
 
 if __name__ == "__main__":
     main()
