@@ -17,17 +17,35 @@ class MediaPipeSegmenter:
 
     def __init__(self, model_selection=0, face_detection_confidence=0.5):
         # 初始化MediaPipe模型
-        mp_selfie_segmentation = mp.solutions.selfie_segmentation
-        mp_face_mesh = mp.solutions.face_mesh
+        self.mp_selfie_segmentation = mp.solutions.selfie_segmentation
+        self.mp_face_mesh = mp.solutions.face_mesh
+        self.mp_pose = mp.solutions.pose
+        self.mp_hands = mp.solutions.hands
 
-        self.selfie_segmentation = mp_selfie_segmentation.SelfieSegmentation(
+        self.selfie_segmentation = self.mp_selfie_segmentation.SelfieSegmentation(
             model_selection=model_selection
         )
-        self.face_mesh = mp_face_mesh.FaceMesh(
+        self.face_mesh = self.mp_face_mesh.FaceMesh(
             static_image_mode=False,
             max_num_faces=1,
             min_detection_confidence=face_detection_confidence
         )
+        self.pose = self.mp_pose.Pose(
+            static_image_mode=False,
+            model_complexity=1,
+            smooth_landmarks=True,
+            enable_segmentation=False,
+            smooth_segmentation=True,
+            min_detection_confidence=0.5,
+            min_tracking_confidence=0.5
+        )
+        self.hands = self.mp_hands.Hands(
+            static_image_mode=False,
+            max_num_hands=2,
+            min_detection_confidence=0.5,
+            min_tracking_confidence=0.5
+        )
+        self.mp_drawing = mp.solutions.drawing_utils
 
     def get_person_mask(self, image_rgb, threshold=0.3):
         """获取人物分割遮罩"""
@@ -70,6 +88,52 @@ class MediaPipeSegmenter:
         """释放资源（如果需要）"""
         # MediaPipe的模型通常不需要手动释放
         pass
+
+    def detect_pose_and_hands(self, image):
+        """
+        识别图像中的姿态和手部，并绘制骨骼。
+
+        Args:
+            image (numpy.ndarray): 输入图像（BGR 格式）。
+
+        Returns:
+            numpy.ndarray: 带骨骼的黑色画布图像。
+        """
+        # 创建黑色画布
+        height, width = image.shape[:2]
+        black_canvas = np.zeros((height, width, 3), dtype=np.uint8)
+
+        # 转换为 RGB
+        image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+
+        # 检测姿态
+        pose_results = self.pose.process(image_rgb)
+
+        # 检测手部
+        hands_results = self.hands.process(image_rgb)
+
+        # 在黑色画布上绘制姿态骨骼
+        if pose_results.pose_landmarks:
+            self.mp_drawing.draw_landmarks(
+                black_canvas,
+                pose_results.pose_landmarks,
+                self.mp_pose.POSE_CONNECTIONS,
+                landmark_drawing_spec=self.mp_drawing.DrawingSpec(color=(0, 255, 0), thickness=2, circle_radius=2),
+                connection_drawing_spec=self.mp_drawing.DrawingSpec(color=(0, 255, 0), thickness=2)
+            )
+
+        # 在黑色画布上绘制手部骨骼
+        if hands_results.multi_hand_landmarks:
+            for hand_landmarks in hands_results.multi_hand_landmarks:
+                self.mp_drawing.draw_landmarks(
+                    black_canvas,
+                    hand_landmarks,
+                    self.mp_hands.HAND_CONNECTIONS,
+                    landmark_drawing_spec=self.mp_drawing.DrawingSpec(color=(255, 0, 0), thickness=2, circle_radius=2),
+                    connection_drawing_spec=self.mp_drawing.DrawingSpec(color=(255, 0, 0), thickness=2)
+                )
+
+        return black_canvas
 class SamSegmenter:
     def __init__(self, model_cfg, sam2_checkpoint, video_path, json_folder):
         """
@@ -504,6 +568,8 @@ def process_single_video(video_path, json_folder, output_root, video_count, disp
     # face_mask_video = os.path.join(output_root, f"FaceMask{video_count}.mp4")
     body_mask_video = os.path.join(output_root, f"BodyMask{video_count}.mp4")
     background_video = os.path.join(output_root, f"Background{video_count}.mp4")
+    pose_video = os.path.join(output_root, f"Pose{video_count}.mp4")
+
 
     # 初始化分割器
     if USE_MEDIAPIPE:
@@ -522,6 +588,7 @@ def process_single_video(video_path, json_folder, output_root, video_count, disp
     # out_face = cv2.VideoWriter(face_mask_video, fourcc, fps, (width, height), isColor=False)
     out_body = cv2.VideoWriter(body_mask_video, fourcc, fps, (width, height), isColor=False)
     out_background = cv2.VideoWriter(background_video, fourcc, fps, (width, height))
+    out_pose = cv2.VideoWriter(pose_video, fourcc, fps, (width, height))
 
     # 如果使用sam识别主体
     if SAM_FLAG:
@@ -536,6 +603,7 @@ def process_single_video(video_path, json_folder, output_root, video_count, disp
                 body_mask = np.zeros_like(frame)
                 out_body.write(body_mask)
                 out_background.write(frame)
+                out_pose.write(segmenter.detect_pose_and_hands(frame))
 
         # 处理所有帧
         for frame_count in tqdm(range(start_frame, frames), desc=f"Processing {video_name}", unit="frame"):
@@ -588,6 +656,7 @@ def process_single_video(video_path, json_folder, output_root, video_count, disp
             # out_face.write(face_mask)
             out_body.write(body_mask)
             out_background.write(background)
+            out_pose.write(segmenter.detect_pose_and_hands(frame))
 
             # 窗口打印
             if display:
@@ -609,6 +678,7 @@ def process_single_video(video_path, json_folder, output_root, video_count, disp
         # out_face.release()
         out_body.release()
         out_background.release()
+        out_pose.release()
         segmenter.release()
         cv2.destroyAllWindows()
 def process_videos(input_dir, json_folder, output_root, start_index = 0):
@@ -642,7 +712,7 @@ def process_videos(input_dir, json_folder, output_root, start_index = 0):
         print(f"还有 {len(video_files)} 个视频需要处理 ")
         for filename in tqdm(video_files, desc="Processing all videos", unit="video"):
             video_path = os.path.join(input_dir, filename)
-            print(f"蒙版合成: {video_path}")
+            print(f" idx = {video_count} 蒙版合成: {video_path}")
             process_single_video(video_path, json_folder, output_root, video_count, False)
             # 写入进度文件
             with open(progress_file, "a", encoding="utf-8") as f:
@@ -689,8 +759,8 @@ SKIN_DETECT = False # 去除皮肤部分
 
 FACE_DILATION = 0   # 面部蒙版膨胀
 FACE_SQUARE = 32    # 面部蒙版方块化
-BODY_DILATION = 32   # 主体蒙版膨胀
-BODY_SQUARE = 32     # 主体蒙版方块化
+BODY_DILATION = 48   # 主体蒙版膨胀
+BODY_SQUARE = 48     # 主体蒙版方块化
 
 THRESHOLD = 0.1         # 身体阈值
 FACE_THRESHOLD = 0.5    # 面部阈值
@@ -699,16 +769,16 @@ FACE_THRESHOLD = 0.5    # 面部阈值
 USE_MEDIAPIPE = True  # 设置为False可以切换为其他分割器
 
 def main():
-    name = "听不清 根本听不清 蔚蓝档案 cos 萝莉 户外舞蹈 甜妹 - 抖音"
-    input_dir = f"D:\AI_Graph\输入\原视频_16fps"  # 可以是单个视频路径，也可以是文件夹路径
+    name = "实则内心非常慌乱 胜利女神nikke cos 萝莉 啦啦队 妮姬 - 抖音"
     input_dir = "D:\AI_Graph\输入\MultiScene.mp4"
+    input_dir = f"D:\AI_Graph\输入\原视频_16fps"  # 可以是单个视频路径，也可以是文件夹路径
     input_dir = f"D:\AI_Graph\输入\原视频_16fps\{name}.mp4"  # 可以是单个视频路径，也可以是文件夹路径
     json_folder = "D:\AI_Graph\输入\sam坐标"
     output_root = r"D:\AI_Graph\输入\输入视频整合"
     
     print("\n\n\n----------------------------------------------------------------------")
     print(f"将{input_dir}生成为遮罩, 输出到{output_root}")
-    process_videos(input_dir, json_folder, output_root, start_index=2)
+    process_videos(input_dir, json_folder, output_root, start_index=3)
 
 if __name__ == "__main__":
     main()
