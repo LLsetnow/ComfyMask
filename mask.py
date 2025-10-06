@@ -71,7 +71,7 @@ class MediaPipeSegmenter:
         # MediaPipe的模型通常不需要手动释放
         pass
 class SamSegmenter:
-    def __init__(self, model_cfg, sam2_checkpoint, video_path):
+    def __init__(self, model_cfg, sam2_checkpoint, video_path, json_folder):
         """
         初始化视频分割器
         
@@ -87,6 +87,7 @@ class SamSegmenter:
 
         self.predictor = build_sam2_video_predictor(model_cfg, sam2_checkpoint, device=device)
         self.video_path = video_path
+        self.json_folder = json_folder
         self.positive_points = []
         self.negative_points = []
         self.video_segments = {}
@@ -108,7 +109,7 @@ class SamSegmenter:
             # 窗口点选
             global fram4samPoint_global, positive_points, negative_points
             cap4samPoint = cv2.VideoCapture(self.video_path)
-            cap4samPoint.set(cv2.CAP_PROP_POS_FRAMES, StartFrame)
+            cap4samPoint.set(cv2.CAP_PROP_POS_FRAMES)
             ret, fram4samPoint_global = cap4samPoint.read()
             cv2.imshow('First Frame', fram4samPoint_global)
             cv2.setMouseCallback('First Frame', click_event)
@@ -151,8 +152,7 @@ class SamSegmenter:
             }
             
         return 
-
-    def process_video_with_dynamic_points(self, json_folder="D:\\AI_Graph\\视频\\输入\\sam坐标"):
+    def process_video_with_dynamic_points(self):
         """
         根据JSON文件动态更新跟踪点处理视频
         
@@ -161,7 +161,7 @@ class SamSegmenter:
             json_folder: JSON文件目录
             
         Returns:
-            video_segments: 包含所有帧分割结果的字典
+            frame_numbers[0]: 首个区间首帧编号
         """
         # 创建临时目录
         temp_dir = "temp"
@@ -174,7 +174,7 @@ class SamSegmenter:
             
         # 读取JSON文件
         video_name = os.path.splitext(os.path.basename(self.video_path))[0]
-        json_path = os.path.join(json_folder, f"{video_name}.json")
+        json_path = os.path.join(self.json_folder, f"{video_name}.json")
         
         if not os.path.exists(json_path):
             raise FileNotFoundError(f"JSON文件未找到: {json_path}")
@@ -218,22 +218,29 @@ class SamSegmenter:
             frame_data = points_data[str(frame_idx)]
             positive_points = [tuple(p) for p in frame_data.get("positive", [])]
             negative_points = [tuple(p) for p in frame_data.get("negative", [])]
+ 
+            box = [p for p in frame_data.get("box", [])]
+
+            # 打印点坐标和box
+            print(f"positive_points: {positive_points}")
+            print(f"negative_points: {negative_points}")
+            print(f"box: {box}")
+            print(f"处理区间 {i}: 帧 {start_frame} - {end_frame}  ")
             
             points = np.array(positive_points + negative_points, dtype=np.float32)
             labels = np.array([1]*len(positive_points) + [0]*len(negative_points), dtype=np.int32)
+            box = np.array(box, dtype=np.float32)
             
             # 初始化预测状态
             inference_state = self.predictor.init_state(video_path=interval_dir)
 
-            print(f"处理区间 {i}: 帧 {start_frame} 到 {end_frame}")
-            print(f"在帧 {frame_idx} 添加 {len(positive_points)} 个正样本点和 {len(negative_points)} 个负样本点")
-            
             _, _, out_mask_logits = self.predictor.add_new_points_or_box(
                 inference_state=inference_state,
                 frame_idx=0,
                 obj_id=i,
                 points=points,
                 labels=labels,
+                box=box,
             )
             
             for out_frame_idx, out_obj_ids, out_mask_logits in self.predictor.propagate_in_video(inference_state):
@@ -244,6 +251,7 @@ class SamSegmenter:
                 }
                 
         shutil.rmtree(temp_dir)
+        return frame_numbers[0]
     def combine_and_plot_masks(self, frame_index):
         """
         将指定帧的所有mask合成并可视化
@@ -278,7 +286,7 @@ class SamSegmenter:
             return
         return combined_mask
 
-    def load_points_from_json(self, json_folder = "D:\AI_Graph\视频\输入\sam坐标"):
+    def load_points_from_json(self):
         """
         从 json_folder文件夹内读取同名的json文件, 并从文件中读取正负点数据
 
@@ -293,7 +301,7 @@ class SamSegmenter:
 
         # 从视频路径中提取文件名（不含扩展名）
         video_name = os.path.splitext(os.path.basename(self.video_path))[0]
-        json_path = os.path.join(json_folder, f"{video_name}.json")
+        json_path = os.path.join(self.json_folder, f"{video_name}.json")
 
         # 初始化返回列表
         self.positive_points = []
@@ -461,12 +469,12 @@ class MaskProcessor:
                 output[labels == i] = 255
                 
         return output
-def process_single_video(video_path, output_root, video_count, display = False):
+def process_single_video(video_path, json_folder, output_root, video_count, display = False):
     """
     核心代码
     处理单个视频，输出对应的遮罩视频
     """
-    # 复制输入视频到 output_root 目录下
+    # 复制输入视频到 output_root 目录下作为OriginVideo
     origin_video_path = os.path.join(output_root, f"OriginVideo{video_count}.mp4")
     shutil.copy(video_path, origin_video_path)
     video_name, _ = os.path.splitext(os.path.basename(video_path))
@@ -481,7 +489,7 @@ def process_single_video(video_path, output_root, video_count, display = False):
         segmenter = MediaPipeSegmenter(model_selection=0, face_detection_confidence=FACE_THRESHOLD)
 
     if SAM_FLAG:
-        sam_segmenter = SamSegmenter(model_cfg, sam2_checkpoint, video_path)
+        sam_segmenter = SamSegmenter(model_cfg, sam2_checkpoint, video_path, json_folder)
     cap = cv2.VideoCapture(video_path)
     fps = cap.get(cv2.CAP_PROP_FPS)
     width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
@@ -492,17 +500,24 @@ def process_single_video(video_path, output_root, video_count, display = False):
     # out_person = cv2.VideoWriter(person_mask_video, fourcc, fps, (width, height), isColor=False)
     # out_face = cv2.VideoWriter(face_mask_video, fourcc, fps, (width, height), isColor=False)
     out_body = cv2.VideoWriter(body_mask_video, fourcc, fps, (width, height), isColor=False)
-    out_final = cv2.VideoWriter(background_video, fourcc, fps, (width, height))
+    out_background = cv2.VideoWriter(background_video, fourcc, fps, (width, height))
 
     # 如果使用sam识别主体
     if SAM_FLAG:
         # 获取所有帧的sam处理结果
         # sam_segmenter.process_video_with_single_point()
-        sam_segmenter.process_video_with_dynamic_points()
+        start_frame = sam_segmenter.process_video_with_dynamic_points()
     try:
         mask_tool = MaskProcessor()
+        if start_frame > 0:
+            for frame_count in range(start_frame):
+                ret, frame = cap.read()
+                body_mask = np.zeros_like(frame)
+                out_body.write(body_mask)
+                out_background.write(frame)
+
         # 处理所有帧
-        for frame_count in tqdm(range(StartFrame, frames), desc=f"Processing {video_name}", unit="frame"):
+        for frame_count in tqdm(range(start_frame, frames), desc=f"Processing {video_name}", unit="frame"):
             ret, frame = cap.read()
 
             if not ret:
@@ -546,12 +561,12 @@ def process_single_video(video_path, output_root, video_count, display = False):
                 body_mask = cv2.bitwise_and(body_mask, cv2.bitwise_not(skin_mask))
 
             # 输出视频帧
-            final_output = frame.copy()
-            final_output[body_mask == 255] = 0
+            background = frame.copy()
+            background[body_mask == 255] = 0
             # out_person.write(processed_person_mask)
             # out_face.write(face_mask)
             out_body.write(body_mask)
-            out_final.write(final_output)
+            out_background.write(background)
 
             # 窗口打印
             if display:
@@ -561,7 +576,7 @@ def process_single_video(video_path, output_root, video_count, display = False):
                 # 设置窗口的初始大小（可选）
                 cv2.resizeWindow('Final Output', width=480, height=832) 
                 # 显示图像
-                cv2.imshow('Final Output', final_output)
+                cv2.imshow('Final Output', background)
                 
                 # 按 'q' 退出
                 if cv2.waitKey(1) & 0xFF == ord('q'):
@@ -573,10 +588,10 @@ def process_single_video(video_path, output_root, video_count, display = False):
         # out_person.release()
         # out_face.release()
         out_body.release()
-        out_final.release()
+        out_background.release()
         segmenter.release()
         cv2.destroyAllWindows()
-def process_videos(input_dir, output_root, start_index = 0):
+def process_videos(input_dir, json_folder, output_root, start_index = 0):
     """
     如果 input_dir 是视频文件 → 处理单个视频
     如果 input_dir 是文件夹 → 遍历处理所有视频
@@ -584,14 +599,15 @@ def process_videos(input_dir, output_root, start_index = 0):
     video_count = start_index
     if os.path.isfile(input_dir):
         if input_dir.lower().endswith((".mp4", ".avi", ".mov", ".mkv")):
-            process_single_video(input_dir, output_root, video_count, True)
+            process_single_video(input_dir, json_folder, output_root, video_count, True)
         else:
             print(f"输入文件不是视频: {input_dir}")
     elif os.path.isdir(input_dir):
         video_files = [f for f in os.listdir(input_dir) if f.lower().endswith((".mp4", ".avi", ".mov", ".mkv"))]
         for filename in tqdm(video_files, desc="Processing all videos", unit="video"):
             video_path = os.path.join(input_dir, filename)
-            process_single_video(video_path, output_root, video_count, False)
+            print(f"蒙版合成: {video_path}")
+            process_single_video(video_path, json_folder, output_root, video_count, False)
             video_count += 1
     else:
         print(f"输入路径不存在: {input_dir}")
@@ -619,8 +635,8 @@ negative_points = []
 fram4samPoint_global = None
 
 # 可调节参数
-model_cfg = "configs\\sam2.1\\sam2.1_hiera_t.yaml"
-sam2_checkpoint = "checkpoints\\sam2.1_hiera_tiny.pt"
+model_cfg = "D:\\AI_Graph\\tools\\configs\\sam2.1\\sam2.1_hiera_t.yaml"
+sam2_checkpoint = "D:\\AI_Graph\\tools\\checkpoints\\sam2.1_hiera_tiny.pt"
 
 # True False
 FLAG_100FRAMS = True
@@ -628,7 +644,6 @@ FLAG_100FRAMS = True
 SAM_FLAG = True         # 是否使用sam识别主体
 SAM_POINT_CLICK = False  # sam窗口点选
 
-StartFrame = 0      # 选择视频的第几帧画点
 DRAW_DOWN = False   # 将下1/3区域全部图黑
 UP_CLEAR = False    # 将头部上方清空
 SKIN_DETECT = False # 去除皮肤部分
@@ -644,13 +659,17 @@ FACE_THRESHOLD = 0.5    # 面部阈值
 # 选择使用的分割器类型
 USE_MEDIAPIPE = True  # 设置为False可以切换为其他分割器
 
-if __name__ == "__main__":
+def main():
     name = "好久不见呀 想我了吗 甘雨 cos 原神 fyp - 抖音"
-    # input_dir = f"D:\AI_Graph\视频\输入\原视频_16fps"  # 可以是单个视频路径，也可以是文件夹路径
-    # input_dir = f"D:\AI_Graph\视频\输入\原视频_16fps\{name}.mp4"  # 可以是单个视频路径，也可以是文件夹路径
-    input_dir = "D:\AI_Graph\视频\输入\MultiScene.mp4"
-    output_root = r"D:\AI_Graph\视频\输入\输入视频整合"
+    input_dir = f"D:\AI_Graph\输入\原视频_16fps"  # 可以是单个视频路径，也可以是文件夹路径
+    # input_dir = f"D:\AI_Graph\输入\原视频_16fps\{name}.mp4"  # 可以是单个视频路径，也可以是文件夹路径
+    # input_dir = "D:\AI_Graph\输入\MultiScene.mp4"
+    json_folder = "D:\AI_Graph\输入\sam坐标"
+    output_root = r"D:\AI_Graph\输入\输入视频整合"
     
     print("\n\n\n----------------------------------------------------------------------")
     print(f"将{input_dir}生成为遮罩, 输出到{output_root}")
-    process_videos(input_dir, output_root, start_index=5)
+    process_videos(input_dir, json_folder, output_root, start_index=5)
+
+if __name__ == "__main__":
+    main()
