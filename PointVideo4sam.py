@@ -3,6 +3,11 @@ import numpy as np
 import json
 import os
 
+# 新增全局变量
+global current_box, drawing_box
+current_box = None  # 存储当前框的坐标 (x1, y1, x2, y2)
+drawing_box = False  # 标记是否正在画框
+
 def mouse_callback(event, x, y, flags, param):
     """
     鼠标回调函数。
@@ -14,33 +19,59 @@ def mouse_callback(event, x, y, flags, param):
         flags: 鼠标事件标志
         param: 用户数据
     """
-    global positive_points, negative_points, frame, current_frame_points, current_frame_index, cap, scale_factor
+    global positive_points, negative_points, frame, frame_origin, current_frame_points, current_frame_index, cap, scale_factor, current_box, drawing_box
     
     if event == cv2.EVENT_LBUTTONDOWN:
-        positive_points.append((x, y))
-        current_frame_points["positive"].append((x, y))
-        cv2.circle(frame, (x, y), 5, (0, 255, 0), -1)
+        if flags & cv2.EVENT_FLAG_CTRLKEY:  # 按住Ctrl键时画框
+            drawing_box = True
+            current_box = (x, y, x, y)  # 初始化框的坐标
+        else:
+            positive_points.append((x, y))
+            current_frame_points["positive"].append((x, y))
+            cv2.circle(frame, (x, y), 5, (0, 255, 0), -1)
+    elif event == cv2.EVENT_LBUTTONUP:
+        if drawing_box:
+            drawing_box = False
+            current_box = (current_box[0], current_box[1], x, y)  # 更新框的右下角坐标
+            # 清除当前帧并重新绘制原图、已标记的点和新框
+            frame = frame_origin.copy()
+            if scale_factor != 1.0:
+                frame = cv2.resize(frame, None, fx=scale_factor, fy=scale_factor, interpolation=cv2.INTER_AREA)
+            # 重新绘制已标记的点
+            for (px, py) in current_frame_points["positive"]:
+                cv2.circle(frame, (px, py), 5, (0, 255, 0), -1)
+            for (nx, ny) in current_frame_points["negative"]:
+                cv2.circle(frame, (nx, ny), 5, (0, 0, 255), -1)
+            # 绘制新框
+            cv2.rectangle(frame, (current_box[0], current_box[1]), (current_box[2], current_box[3]), (255, 200, 100), 2)
+    elif event == cv2.EVENT_MOUSEMOVE:
+        if drawing_box:
+            current_box = (current_box[0], current_box[1], x, y)  # 更新框的右下角坐标
     elif event == cv2.EVENT_RBUTTONDOWN:
         negative_points.append((x, y))
         current_frame_points["negative"].append((x, y))
         cv2.circle(frame, (x, y), 5, (0, 0, 255), -1)
     elif event == cv2.EVENT_MOUSEWHEEL:
-        if flags > 0:  # 滚轮向上，切换到上一帧
+        if flags > 0:  # 滚轮向上,切换到上一帧
             if current_frame_index > 0:
                 current_frame_index -= 1
                 cap.set(cv2.CAP_PROP_POS_FRAMES, current_frame_index)
                 ret, frame = cap.read()
+                frame_origin = frame.copy()
                 if scale_factor != 1.0:
                     frame = cv2.resize(frame, None, fx=scale_factor, fy=scale_factor, interpolation=cv2.INTER_AREA)
                 current_frame_points = {"positive": [], "negative": []}
-        else:  # 滚轮向下，切换到下一帧
+                current_box = None  # 清除当前帧的框
+        else:  # 滚轮向下,切换到下一帧
             if current_frame_index < int(cap.get(cv2.CAP_PROP_FRAME_COUNT)) - 1:
                 current_frame_index += 1
                 cap.set(cv2.CAP_PROP_POS_FRAMES, current_frame_index)
                 ret, frame = cap.read()
+                frame_origin = frame.copy()
                 if scale_factor != 1.0:
                     frame = cv2.resize(frame, None, fx=scale_factor, fy=scale_factor, interpolation=cv2.INTER_AREA)
                 current_frame_points = {"positive": [], "negative": []}
+                current_box = None  # 清除当前帧的框
 
 def get_points_from_video(video_path: str, json_dir: str):
     """
@@ -50,7 +81,7 @@ def get_points_from_video(video_path: str, json_dir: str):
         video_path: 输入视频文件的路径
         json_dir: 保存JSON文件的目录
     """
-    global positive_points, negative_points, frame, scale_factor, current_frame_points, frame_data, current_frame_index, cap
+    global positive_points, negative_points, frame, frame_origin, scale_factor, current_frame_points, frame_data, current_frame_index, cap
     
     # 读取视频文件
     cap = cv2.VideoCapture(video_path)
@@ -63,6 +94,7 @@ def get_points_from_video(video_path: str, json_dir: str):
     
     # 读取第一帧  
     ret, frame = cap.read()
+    frame_origin = frame.copy()
     if not ret:
         print(f"Error: Could not read first frame from: {video_path}")
         cap.release()
@@ -100,14 +132,15 @@ def get_points_from_video(video_path: str, json_dir: str):
         
         # 处理按键事件
         key = cv2.waitKey(1) & 0xFF
-        
-        if key == ord('q'):  # 退出
-            break
+        if key == ord('q'):  # 退出程序
+            break        
+
         elif key == ord('s'):  # 提交当前帧点坐标
             if current_frame_points["positive"] or current_frame_points["negative"]:
                 frame_data[current_frame_index] = {
                     "positive": current_frame_points["positive"],
-                    "negative": current_frame_points["negative"]
+                    "negative": current_frame_points["negative"],
+                    "box": current_box
                 }
                 print(f"Frame {current_frame_index} points submitted:")
                 print(f"Positive points: {current_frame_points['positive']}")
@@ -120,6 +153,7 @@ def get_points_from_video(video_path: str, json_dir: str):
             print(f"Frame {current_frame_index} points cleared")
             cap.set(cv2.CAP_PROP_POS_FRAMES, current_frame_index)
             ret, frame = cap.read()
+            frame_origin = frame.copy()
             if scale_factor != 1.0:
                 frame = cv2.resize(frame, None, fx=scale_factor, fy=scale_factor, interpolation=cv2.INTER_AREA)
         elif key == 81:  # 左箭头键 - 上一帧
@@ -127,6 +161,7 @@ def get_points_from_video(video_path: str, json_dir: str):
                 current_frame_index -= 1
                 cap.set(cv2.CAP_PROP_POS_FRAMES, current_frame_index)
                 ret, frame = cap.read()
+                frame_origin = frame.copy()
                 if scale_factor != 1.0:
                     frame = cv2.resize(frame, None, fx=scale_factor, fy=scale_factor, interpolation=cv2.INTER_AREA)
                 current_frame_points = {"positive": [], "negative": []}
@@ -135,6 +170,7 @@ def get_points_from_video(video_path: str, json_dir: str):
                 current_frame_index += 1
                 cap.set(cv2.CAP_PROP_POS_FRAMES, current_frame_index)
                 ret, frame = cap.read()
+                frame_origin = frame.copy()
                 if scale_factor != 1.0:
                     frame = cv2.resize(frame, None, fx=scale_factor, fy=scale_factor, interpolation=cv2.INTER_AREA)
                 current_frame_points = {"positive": [], "negative": []}
@@ -145,6 +181,7 @@ def get_points_from_video(video_path: str, json_dir: str):
             current_frame_index = trackbar_pos
             cap.set(cv2.CAP_PROP_POS_FRAMES, current_frame_index)
             ret, frame = cap.read()
+            frame_origin = frame.copy()
             if scale_factor != 1.0:
                 frame = cv2.resize(frame, None, fx=scale_factor, fy=scale_factor, interpolation=cv2.INTER_AREA)
             current_frame_points = {"positive": [], "negative": []}
@@ -152,12 +189,14 @@ def get_points_from_video(video_path: str, json_dir: str):
     # 释放资源
     cap.release()
     cv2.destroyAllWindows()
-    
-    # 如果帧被缩放，将点坐标缩放回原始尺寸
+
+    # 如果帧被缩放,将点坐标缩放回原始尺寸
     for frame_idx in frame_data:
         if scale_factor != 1.0:
             frame_data[frame_idx]["positive"] = [(int(x / scale_factor), int(y / scale_factor)) for x, y in frame_data[frame_idx]["positive"]]
             frame_data[frame_idx]["negative"] = [(int(x / scale_factor), int(y / scale_factor)) for x, y in frame_data[frame_idx]["negative"]]
+            if frame_data[frame_idx]["box"]:
+                frame_data[frame_idx]["box"] = [int(coord / scale_factor) for coord in frame_data[frame_idx]["box"]]
     
     # 将点坐标保存到JSON文件
     name, _ = os.path.splitext(os.path.basename(video_path))
@@ -193,8 +232,17 @@ def process_videos(video_path: str, json_dir: str):
         print(f"Error: Invalid path: {video_path}")
 
 def main():
-    video_path = r"D:\AI_Graph\视频\输入\MultiScene.mp4"
-    json_dir = r"D:\AI_Graph\视频\输入\sam坐标"
+    print("""
+        s键提交当前帧点坐标\n
+        c键清除当前帧点坐标\n
+        q键保存并退出\n
+        按住ctrl 以画框\n
+        左键点击提交正样本点坐标\n
+        右键点击提交负样本点坐标\n
+        滚轮向上切换到上一帧,滚轮向下切换到下一帧
+    """)
+    video_path = r"D:\AI_Graph\输入\原视频_16fps"
+    json_dir = r"D:\AI_Graph\输入\sam坐标"
     process_videos(video_path, json_dir)   
 
 # 全局变量
