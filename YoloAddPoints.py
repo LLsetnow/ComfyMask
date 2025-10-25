@@ -17,7 +17,7 @@ class YOLOProcessor:
     """
 
     def __init__(self, video_path, output_json_dir, body_model_path, face_model_path, 
-                frame_interval=1000, frame_sequence=None):
+                frame_interval, frame_sequence=None):
         """
         初始化YOLO处理器。
 
@@ -56,14 +56,9 @@ class YOLOProcessor:
                 break
 
             # 检查是否需要处理当前帧
-            if self.frame_sequence is not None:
-                if frame_count not in self.frame_sequence:
-                    frame_count += 1
-                    continue
-            elif frame_count % self.frame_interval != 0:
+            if frame_count % self.frame_interval != 0 and frame_count not in self.frame_sequence:
                 frame_count += 1
                 continue
-
 
             current_frame_points = {"positive": [], "negative": []}
             current_box = None
@@ -81,7 +76,7 @@ class YOLOProcessor:
                     center_y = (y1 + y2) // 2
                     face_down_y = y2
                     current_frame_points["negative"].append((center_x, center_y))
-                    cv2.rectangle(frame, (int(x1), int(y1)), (int(x2), int(y2)), (255, 0, 0), 2)
+                    cv2.rectangle(frame, (int(x1), int(y1)), (int(x2), int(y2)), (0, 0, 255), 2)
                 else:
                     flag_face = False
                     current_frame_points["positive"].append((0, 0))
@@ -162,14 +157,16 @@ class YOLOProcessor:
 
 if __name__ == "__main__":
     # 示例用法
-    name = "我不是gay 胸肌 - 抖音"
+    name = "路过吹个口哨感觉至上 - 抖音"
     video_path = f"D:\AI_Graph\输入\原视频_16fps\{name}.mp4"  # 替换为实际视频路径
     video_path = r"D:\AI_Graph\输入\原视频_16fps"  # 替换为实际视频路径
+
+
     output_json_dir = "D:\AI_Graph\输入\sam坐标"  # 替换为输出JSON文件路径
     body_model_path = r"D:\AI_Graph\tools\checkpoints\yolo11l.pt"  # 替换为人体检测模型路径
     face_model_path = r"D:\AI_Graph\tools\checkpoints\face_yolov8m.pt"  # 替换为人脸检测模型路径
-    frame_interval = 48  # 每隔n帧处理一帧
-    frame_sequence = [0, 5, 10, 40, 70, 100, 150, 200, 250, 300]  # 或指定帧序列
+    frame_interval = 1000  # 每隔n帧处理一帧
+    frame_sequence = [0]  # 或指定帧序列
 
     processor = YOLOProcessor(video_path, output_json_dir, body_model_path, face_model_path, 
                             frame_interval, frame_sequence)

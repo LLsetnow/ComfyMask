@@ -241,7 +241,8 @@ def main():
         右键点击提交负样本点坐标\n
         滚轮向上切换到上一帧,滚轮向下切换到下一帧
     """)
-    video_path = r"D:\AI_Graph\输入\原视频_16fps"
+    name = "我不是gay 胸肌 - 抖音"
+    video_path = f"D:\AI_Graph\输入\原视频_16fps\{name}.mp4"
     json_dir = r"D:\AI_Graph\输入\sam坐标"
     process_videos(video_path, json_dir)   
 

@@ -89,6 +89,22 @@ class MediaPipeSegmenter:
         # MediaPipe的模型通常不需要手动释放
         pass
 
+    def draw_above_black(self, souce_mask, y):
+        """
+        在souce_mask上, 将上百分之y的白色区域涂黑
+        
+        Args:
+            souce_mask: 输入蒙版
+            y: 要涂黑的百分比
+            
+        Returns:
+            处理后的蒙版
+        """
+        height, width = souce_mask.shape[:2]
+        threshold_row = int(height * (y / 100))
+        souce_mask[:threshold_row, :] = 0
+        return souce_mask
+
     def detect_pose_and_hands(self, image):
         """
         识别图像中的姿态和手部，并绘制骨骼。
@@ -310,21 +326,36 @@ class SamSegmenter:
                 print(f"box: {box}")
                 print(f"处理区间 {i}: 帧 {start_frame} - {end_frame}  ")
                 
-                points = np.array(positive_points + negative_points, dtype=np.float32)
-                labels = np.array([1]*len(positive_points) + [0]*len(negative_points), dtype=np.int32)
-                box = np.array(box, dtype=np.float32)
-                
-                # 初始化预测状态
-                inference_state = self.predictor.init_state(video_path=interval_dir)
+                if SAM_DETECT_OBJECT == "body":
+                    # 识别身体
+                    points = np.array(positive_points + negative_points, dtype=np.float32)
+                    labels = np.array([1]*len(positive_points) + [0]*len(negative_points), dtype=np.int32)
+                    box = np.array(box, dtype=np.float32)
+                    
+                    # 初始化预测状态
+                    inference_state = self.predictor.init_state(video_path=interval_dir)
 
-                _, _, out_mask_logits = self.predictor.add_new_points_or_box(
-                    inference_state=inference_state,
-                    frame_idx=0,
-                    obj_id=i,
-                    points=points,
-                    labels=labels,
-                    box=box,
-                )
+                    _, _, out_mask_logits = self.predictor.add_new_points_or_box(
+                        inference_state=inference_state,
+                        frame_idx=0,
+                        obj_id=i,
+                        points=points,
+                        labels=labels,
+                        box=box,
+                    )
+                elif SAM_DETECT_OBJECT == "face":
+                    # 识别脸部
+                    points = np.array(negative_points + positive_points, dtype=np.float32)
+                    labels = np.array([1]*len(positive_points) + [0]*len(negative_points), dtype=np.int32)
+                    # 初始化预测状态
+                    inference_state = self.predictor.init_state(video_path=interval_dir)
+                    _, _, out_mask_logits = self.predictor.add_new_points_or_box(
+                        inference_state=inference_state,
+                        frame_idx=0,
+                        obj_id=i,
+                        points=points,
+                        labels=labels,
+                    )
                 
                 for out_frame_idx, out_obj_ids, out_mask_logits in self.predictor.propagate_in_video(inference_state):
                     actual_frame = start_frame + out_frame_idx
@@ -411,6 +442,61 @@ class MaskProcessor:
         Args:
 
         """
+    def draw_above_black(self, souce_mask, y = 0.7):
+        """
+        在souce_mask上, 将上百分之y的白色区域涂黑
+        
+        Args:
+            souce_mask: 输入蒙版
+            y: 要涂黑的百分比
+            
+        Returns:
+            处理后的蒙版
+        """
+        height, width = souce_mask.shape[:2]
+        threshold_row = int(height * y)
+        souce_mask[:threshold_row, :] = 0
+        return souce_mask
+    def substract_mask(self, souce_mask, sub_mask):
+        """
+        souce_mask - sub_mask
+        
+        Args:
+            souce_mask: 输入蒙版
+            sub_mask: 减去的蒙版
+            
+        Returns:
+            处理后的蒙版
+        """
+        mask = cv2.bitwise_and(souce_mask, cv2.bitwise_not(sub_mask))
+        return mask
+    def add_mask(self, souce_mask, add_mask):
+        """
+        souce_mask + add_mask
+        
+        Args:
+            souce_mask: 输入蒙版
+            add_mask: 加上的蒙版
+            
+        Returns:
+            处理后的蒙版
+        """
+        mask = cv2.bitwise_or(souce_mask, add_mask)
+        return mask
+    def draw_black_mask(self, souce_mask, black_mask):
+        """
+        在souce_mask上, 将add_mask的白色区域涂黑
+        
+        Args:
+            souce_mask: 输入蒙版
+            black_mask: 要涂黑的蒙版
+            
+        Returns:
+            处理后的蒙版
+        """
+        souce_mask[black_mask == 255] = 0
+        return souce_mask
+
     def fill_above_min_y(self, face_mask):
         """
         清空头的上方区域（不识别）
@@ -573,7 +659,7 @@ def process_single_video(video_path, json_folder, output_root, video_count, disp
 
     # 初始化分割器
     if USE_MEDIAPIPE:
-        segmenter = MediaPipeSegmenter(model_selection=0, face_detection_confidence=FACE_THRESHOLD)
+        media_segmenter = MediaPipeSegmenter(model_selection=0, face_detection_confidence=FACE_THRESHOLD)
 
     if SAM_FLAG:
         sam_segmenter = SamSegmenter(model_cfg, sam2_checkpoint, video_path, json_folder)
@@ -592,41 +678,47 @@ def process_single_video(video_path, json_folder, output_root, video_count, disp
 
     # 如果使用sam识别主体
     if SAM_FLAG:
-        # 获取所有帧的sam处理结果
-        # sam_segmenter.process_video_with_single_point()
+        # 获取有sam标记的起始帧号
         start_frame = sam_segmenter.process_video_with_dynamic_points()
     try:
         mask_tool = MaskProcessor()
+        # 跳过前start_frame
         if SAM_FLAG and start_frame > 0:
             for frame_count in range(start_frame):
                 ret, frame = cap.read()
                 body_mask = np.zeros_like(frame)
                 out_body.write(body_mask)
                 out_background.write(frame)
-                out_pose.write(segmenter.detect_pose_and_hands(frame))
+                out_pose.write(media_segmenter.detect_pose_and_hands(frame))
         else:
             start_frame = 0
         # 处理所有帧
         for frame_count in tqdm(range(start_frame, frames), desc=f"Processing {video_name}", unit="frame"):
             ret, frame = cap.read()
-
+            image_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             if not ret:
                 break
 
-            image_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            if SAM_FLAG:
-                # person_mask = combine_and_plot_masks(video_segments, frame_count)
+
+
+            # mask创建
+            if SAM_FLAG and SAM_DETECT_OBJECT == "body":
+            # sam识别主体 mediaPipe识别面部
                 person_mask = sam_segmenter.combine_and_plot_masks(frame_count)
                 person_mask = person_mask.astype(np.uint8) * 255
-            else:
-                person_mask = segmenter.get_person_mask(image_rgb, threshold=THRESHOLD)
-            
-            # 获取面部蒙版
-            face_mask = segmenter.get_face_mask(image_rgb)
-            if SKIN_DETECT:
-                skin_mask = mask_tool.detect_skin_mask(image_rgb)
-                skin_mask = mask_tool.remove_small_components(skin_mask, int(width * height / 150))
-
+                media_person = media_segmenter.get_person_mask(image_rgb, threshold=THRESHOLD)
+                media_person = mask_tool.draw_above_black(media_person, 0.5)
+                person_mask = mask_tool.add_mask(person_mask, media_person)
+                face_mask = media_segmenter.get_face_mask(image_rgb)
+            elif SAM_FLAG and SAM_DETECT_OBJECT == "face":
+            # sam识别面部 mediaPipe识别主体
+                face_mask = sam_segmenter.combine_and_plot_masks(frame_count)
+                face_mask = face_mask.astype(np.uint8) * 255
+                person_mask = media_segmenter.get_person_mask(image_rgb, threshold=THRESHOLD)           
+            elif not SAM_FLAG:
+            # mediaPipe识别主体和面部
+                person_mask = media_segmenter.get_person_mask(image_rgb, threshold=THRESHOLD)
+                face_mask = media_segmenter.get_face_mask(image_rgb)  
             if person_mask is None:
                 continue
                 
@@ -645,29 +737,29 @@ def process_single_video(video_path, json_folder, output_root, video_count, disp
             if DRAW_DOWN:
                 person_mask = mask_tool.fill_below_y(person_mask, int(height * 0.7))
             
-            # 主体区域 - 面部区域 - 皮肤区域（如果开启）
-            body_mask = cv2.bitwise_and(person_mask, cv2.bitwise_not(face_mask))
-            if SKIN_DETECT:
-                body_mask = cv2.bitwise_and(body_mask, cv2.bitwise_not(skin_mask))
+            # 主体区域 - 面部区域
+            body_mask = mask_tool.substract_mask(person_mask, face_mask)
 
             # 输出视频帧
-            background = frame.copy()
-            background[body_mask == 255] = 0
+            background = mask_tool.draw_black_mask(frame, body_mask)
+
             # out_person.write(processed_person_mask)
             # out_face.write(face_mask)
             out_body.write(body_mask)
             out_background.write(background)
-            out_pose.write(segmenter.detect_pose_and_hands(frame))
+            out_pose.write(media_segmenter.detect_pose_and_hands(frame))
 
             # 窗口打印
+            # if True:
             if display:
+
                 # 创建一个可调整大小的窗口
                 cv2.namedWindow('Final Output', cv2.WINDOW_NORMAL)
                 
                 # 设置窗口的初始大小（可选）
                 cv2.resizeWindow('Final Output', width=480, height=832) 
                 # 显示图像
-                cv2.imshow('Final Output', background)
+                cv2.imshow('Final Output', face_mask)
                 
                 # 按 'q' 退出
                 if cv2.waitKey(1) & 0xFF == ord('q'):
@@ -680,9 +772,9 @@ def process_single_video(video_path, json_folder, output_root, video_count, disp
         out_body.release()
         out_background.release()
         out_pose.release()
-        segmenter.release()
+        media_segmenter.release()
         cv2.destroyAllWindows()
-def process_videos(input_dir, json_folder, output_root, start_index = 0):
+def process_videos(input_dir, json_folder, output_root, start_index = 1):
     """
     如果 input_dir 是视频文件 → 处理单个视频
     如果 input_dir 是文件夹 → 遍历处理所有视频
@@ -753,6 +845,7 @@ FLAG_100FRAMS = True
 
 SAM_FLAG = True         # 是否使用sam识别主体
 SAM_POINT_CLICK = False  # sam窗口点选
+SAM_DETECT_OBJECT = "body"
 
 DRAW_DOWN = False   # 将下1/3区域全部图黑
 UP_CLEAR = False    # 将头部上方清空
@@ -772,8 +865,8 @@ USE_MEDIAPIPE = True  # 设置为False可以切换为其他分割器
 def main():
     name = "我不是gay 胸肌 - 抖音"
     input_dir = "D:\AI_Graph\输入\MultiScene.mp4"
-    input_dir = f"D:\AI_Graph\输入\原视频_16fps"  # 可以是单个视频路径，也可以是文件夹路径
     input_dir = f"D:\AI_Graph\输入\原视频_16fps\{name}.mp4"  # 可以是单个视频路径，也可以是文件夹路径
+    input_dir = f"D:\AI_Graph\输入\原视频_16fps"  # 可以是单个视频路径，也可以是文件夹路径
     json_folder = "D:\AI_Graph\输入\sam坐标"
     output_root = r"D:\AI_Graph\输入\输入视频整合"
     

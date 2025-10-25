@@ -289,8 +289,8 @@ def batch_change_video_fps(input_folder, output_folder, n, file_extensions=['.mp
 
 def main():
     # 批量处理示例
-    input_folder = r"D:\AI_Graph\视频\输入\原视频"
-    output_folder = r"D:\AI_Graph\视频\输入\原视频_16fps"
+    input_folder = r"D:\AI_Graph\输入\原视频"
+    output_folder = r"D:\AI_Graph\输入\原视频_16fps"
 
     print("\n\n\n----------------------------------------------------------------------")
     print(f"将{input_folder}文件夹内的视频处理为16fps, 输出到{output_folder}")

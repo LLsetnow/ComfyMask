@@ -34,8 +34,8 @@ def axisImage(image, output_path):
     new_image.save(output_path)     
 
 def main():
-    image = Image.open(r'D:\AI_Graph\VideoCutFrame\0.jpg')
-    axisImage(image, r'D:\AI_Graph\test_axis.jpg')
+    image = Image.open(r'D:\AI_Graph\输入\sam坐标\听不清 根本听不清 蔚蓝档案 cos 萝莉 户外舞蹈 甜妹 - 抖音_0.jpg')
+    axisImage(image, r'D:\AI_Graph\输入\sam坐标\test_axis.jpg')
 
     
 if __name__ == '__main__':
