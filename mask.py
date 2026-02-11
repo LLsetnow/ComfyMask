@@ -674,7 +674,7 @@ def process_single_video(video_path, json_folder, output_root, video_count, disp
     # out_face = cv2.VideoWriter(face_mask_video, fourcc, fps, (width, height), isColor=False)
     out_body = cv2.VideoWriter(body_mask_video, fourcc, fps, (width, height), isColor=False)
     out_background = cv2.VideoWriter(background_video, fourcc, fps, (width, height))
-    out_pose = cv2.VideoWriter(pose_video, fourcc, fps, (width, height))
+    # out_pose = cv2.VideoWriter(pose_video, fourcc, fps, (width, height))
 
     # 如果使用sam识别主体
     if SAM_FLAG:
@@ -689,7 +689,7 @@ def process_single_video(video_path, json_folder, output_root, video_count, disp
                 body_mask = np.zeros_like(frame)
                 out_body.write(body_mask)
                 out_background.write(frame)
-                out_pose.write(media_segmenter.detect_pose_and_hands(frame))
+                # out_pose.write(media_segmenter.detect_pose_and_hands(frame))
         else:
             start_frame = 0
         # 处理所有帧
@@ -747,7 +747,7 @@ def process_single_video(video_path, json_folder, output_root, video_count, disp
             # out_face.write(face_mask)
             out_body.write(body_mask)
             out_background.write(background)
-            out_pose.write(media_segmenter.detect_pose_and_hands(frame))
+            # out_pose.write(media_segmenter.detect_pose_and_hands(frame))
 
             # 窗口打印
             # if True:
@@ -771,7 +771,7 @@ def process_single_video(video_path, json_folder, output_root, video_count, disp
         # out_face.release()
         out_body.release()
         out_background.release()
-        out_pose.release()
+        # out_pose.release()
         media_segmenter.release()
         cv2.destroyAllWindows()
 def process_videos(input_dir, json_folder, output_root, start_index = 1):
@@ -843,18 +843,18 @@ sam2_checkpoint = "D:\\AI_Graph\\tools\\checkpoints\\sam2.1_hiera_tiny.pt"
 # True False
 FLAG_100FRAMS = True
 
-SAM_FLAG = True         # 是否使用sam识别主体
+SAM_FLAG = False         # 是否使用sam识别主体
 SAM_POINT_CLICK = False  # sam窗口点选
 SAM_DETECT_OBJECT = "body"
 
 DRAW_DOWN = False   # 将下1/3区域全部图黑
-UP_CLEAR = False    # 将头部上方清空
+UP_CLEAR = True    # 将头部上方清空
 SKIN_DETECT = False # 去除皮肤部分
 
 FACE_DILATION = 0   # 面部蒙版膨胀
-FACE_SQUARE = 32    # 面部蒙版方块化
-BODY_DILATION = 48   # 主体蒙版膨胀
-BODY_SQUARE = 48     # 主体蒙版方块化
+FACE_SQUARE = 16    # 面部蒙版方块化
+BODY_DILATION = 24   # 主体蒙版膨胀
+BODY_SQUARE = 24     # 主体蒙版方块化
 
 THRESHOLD = 0.1         # 身体阈值
 FACE_THRESHOLD = 0.5    # 面部阈值

@@ -31,7 +31,7 @@ from moviepy.editor import VideoFileClip, AudioFileClip
 import tempfile
 
 
-def change_video_fps_advanced(video_path, output_path, n, method='drop', keep_audio=True):
+def change_video_fps_advanced(video_path, output_path, n, method='drop', keep_audio=True, new_width=None, new_height=None):
     """
     高级视频帧率转换函数
 
@@ -85,7 +85,10 @@ def change_video_fps_advanced(video_path, output_path, n, method='drop', keep_au
 
         # 设置视频编码器
         fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-        out = cv2.VideoWriter(temp_video_path, fourcc, target_fps, (width, height))
+        # 使用新的分辨率（如果指定）
+        output_width = new_width if new_width is not None else width
+        output_height = new_height if new_height is not None else height
+        out = cv2.VideoWriter(temp_video_path, fourcc, target_fps, (output_width, output_height))
 
         if not out.isOpened():
             print(f"错误: 无法创建输出视频文件: {temp_video_path}")
@@ -104,6 +107,10 @@ def change_video_fps_advanced(video_path, output_path, n, method='drop', keep_au
 
                 if not ret:
                     break
+
+                # 调整分辨率（如果指定）
+                if new_width is not None and new_height is not None:
+                    frame = cv2.resize(frame, (new_width, new_height))
 
                 # 根据帧间隔决定是否保存当前帧
                 if frame_count % round(frame_interval) == 0:
@@ -128,6 +135,10 @@ def change_video_fps_advanced(video_path, output_path, n, method='drop', keep_au
 
                     if not ret:
                         break
+
+                    # 调整分辨率（如果指定）
+                    if new_width is not None and new_height is not None:
+                        frame = cv2.resize(frame, (new_width, new_height))
 
                     # 重复写入当前帧
                     for _ in range(round(repeat_factor)):
@@ -245,7 +256,7 @@ def change_video_fps_advanced(video_path, output_path, n, method='drop', keep_au
         return False
 
 
-def batch_change_video_fps(input_folder, output_folder, n, file_extensions=['.mp4', '.avi', '.mov'], keep_audio=True):
+def batch_change_video_fps(input_folder, output_folder, n, file_extensions=['.mp4', '.avi', '.mov'], keep_audio=True, new_width=None, new_height=None):
     """
     批量处理文件夹中的所有视频文件
 
@@ -279,7 +290,7 @@ def batch_change_video_fps(input_folder, output_folder, n, file_extensions=['.mp
         output_path = os.path.join(output_folder, video_file)
 
         # 处理视频
-        success = change_video_fps_advanced(input_path, output_path, n, keep_audio=keep_audio)
+        success = change_video_fps_advanced(input_path, output_path, n, keep_audio=keep_audio, new_width=new_width, new_height=new_height)
 
         if success:
             print(f"成功处理: {video_file}")
@@ -295,7 +306,7 @@ def main():
     print("\n\n\n----------------------------------------------------------------------")
     print(f"将{input_folder}文件夹内的视频处理为16fps, 输出到{output_folder}")
     # 批量将所有视频转换为16 FPS，并保留音频
-    batch_change_video_fps(input_folder, output_folder, 16, keep_audio=True)
+    batch_change_video_fps(input_folder, output_folder, 16, keep_audio=True, new_width=512, new_height=896)
     print("处理完成")
 
 if __name__ == "__main__":
