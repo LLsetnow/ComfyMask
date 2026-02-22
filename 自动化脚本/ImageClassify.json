@@ -1,0 +1,277 @@
+{
+  "29": {
+    "inputs": {
+      "model_name": "bbox/female-breast-v4.7.pt"
+    },
+    "class_type": "UltralyticsDetectorProvider",
+    "_meta": {
+      "title": "UltralyticsDetectorProvider"
+    }
+  },
+  "33": {
+    "inputs": {
+      "white_point": 1,
+      "area_percent": 1,
+      "mask": [
+        "35",
+        0
+      ]
+    },
+    "class_type": "LayerUtility: CheckMask",
+    "_meta": {
+      "title": "图层工具：检查遮罩"
+    }
+  },
+  "35": {
+    "inputs": {
+      "threshold": 0.15,
+      "dilation": 4,
+      "bbox_detector": [
+        "29",
+        0
+      ],
+      "image": [
+        "53",
+        0
+      ]
+    },
+    "class_type": "BboxDetectorCombined_v2",
+    "_meta": {
+      "title": "BBOX Detector (combined)"
+    }
+  },
+  "40": {
+    "inputs": {
+      "boolean": [
+        "33",
+        0
+      ],
+      "on_true": [
+        "65",
+        0
+      ],
+      "on_false": [
+        "63",
+        0
+      ]
+    },
+    "class_type": "easy ifElse",
+    "_meta": {
+      "title": "是否判断"
+    }
+  },
+  "41": {
+    "inputs": {
+      "value": "boobs/ "
+    },
+    "class_type": "PrimitiveString",
+    "_meta": {
+      "title": "字符串"
+    }
+  },
+  "42": {
+    "inputs": {
+      "value": "normal/ "
+    },
+    "class_type": "PrimitiveString",
+    "_meta": {
+      "title": "字符串"
+    }
+  },
+  "43": {
+    "inputs": {
+      "filename_prefix": [
+        "40",
+        0
+      ],
+      "images": [
+        "53",
+        0
+      ]
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "保存图像"
+    }
+  },
+  "53": {
+    "inputs": {
+      "width": [
+        "57",
+        0
+      ],
+      "height": [
+        "55",
+        0
+      ],
+      "upscale_method": "nearest-exact",
+      "keep_proportion": "resize",
+      "pad_color": "0, 0, 0",
+      "crop_position": "center",
+      "divisible_by": 2,
+      "device": "cpu",
+      "image": [
+        "61",
+        0
+      ]
+    },
+    "class_type": "ImageResizeKJv2",
+    "_meta": {
+      "title": "Resize Image v2"
+    }
+  },
+  "54": {
+    "inputs": {
+      "cmp": "a >= b",
+      "a": [
+        "60",
+        0
+      ],
+      "b": [
+        "60",
+        1
+      ]
+    },
+    "class_type": "ImpactCompare",
+    "_meta": {
+      "title": "ImpactCompare"
+    }
+  },
+  "55": {
+    "inputs": {
+      "boolean": [
+        "56",
+        0
+      ],
+      "on_true": [
+        "59",
+        0
+      ],
+      "on_false": [
+        "58",
+        0
+      ]
+    },
+    "class_type": "easy ifElse",
+    "_meta": {
+      "title": "竖出1280 横图出980"
+    }
+  },
+  "56": {
+    "inputs": {
+      "cmp": "a <= b",
+      "a": [
+        "60",
+        0
+      ],
+      "b": [
+        "60",
+        1
+      ]
+    },
+    "class_type": "ImpactCompare",
+    "_meta": {
+      "title": "ImpactCompare"
+    }
+  },
+  "57": {
+    "inputs": {
+      "boolean": [
+        "54",
+        0
+      ],
+      "on_true": [
+        "59",
+        0
+      ],
+      "on_false": [
+        "58",
+        0
+      ]
+    },
+    "class_type": "easy ifElse",
+    "_meta": {
+      "title": "竖出980 横图出1280"
+    }
+  },
+  "58": {
+    "inputs": {
+      "value": 1280
+    },
+    "class_type": "INTConstant",
+    "_meta": {
+      "title": "设置长边"
+    }
+  },
+  "59": {
+    "inputs": {
+      "value": 1600
+    },
+    "class_type": "INTConstant",
+    "_meta": {
+      "title": "设置长边"
+    }
+  },
+  "60": {
+    "inputs": {
+      "image": [
+        "61",
+        0
+      ]
+    },
+    "class_type": "GetImageSize+",
+    "_meta": {
+      "title": "🔧 Get Image Size"
+    }
+  },
+  "61": {
+    "inputs": {
+      "image": "19_original.jpg"
+    },
+    "class_type": "LoadImage",
+    "_meta": {
+      "title": "加载图像"
+    }
+  },
+  "63": {
+    "inputs": {
+      "string_a": [
+        "42",
+        0
+      ],
+      "string_b": [
+        "64",
+        0
+      ]
+    },
+    "class_type": "ConcatStringSingle",
+    "_meta": {
+      "title": "Concat String (Single) 📅🅕🅝"
+    }
+  },
+  "64": {
+    "inputs": {
+      "value": "abc"
+    },
+    "class_type": "PrimitiveString",
+    "_meta": {
+      "title": "filename"
+    }
+  },
+  "65": {
+    "inputs": {
+      "string_a": [
+        "41",
+        0
+      ],
+      "string_b": [
+        "64",
+        0
+      ]
+    },
+    "class_type": "ConcatStringSingle",
+    "_meta": {
+      "title": "Concat String (Single) 📅🅕🅝"
+    }
+  }
+}

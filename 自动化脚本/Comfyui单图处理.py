@@ -143,8 +143,8 @@ def main():
         print(f"\n[{i+1}/{len(image_paths)}]")
         process_image(image_path)
         if i < len(image_paths) - 1:
-            print("\n等待45秒后处理下一张...")
-            time.sleep(45)
+            print("\n等待30秒后处理下一张...")
+            time.sleep(30)
     
     print("\n" + "=" * 50)
     print("处理完成！")

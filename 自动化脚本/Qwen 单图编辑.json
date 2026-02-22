@@ -237,15 +237,15 @@
   "106": {
     "inputs": {
       "width": [
-        "168",
+        "180",
         0
       ],
       "height": [
-        "169",
+        "176",
         0
       ],
       "upscale_method": "nearest-exact",
-      "keep_proportion": "crop",
+      "keep_proportion": "resize",
       "pad_color": "0, 0, 0",
       "crop_position": "center",
       "divisible_by": 2,
@@ -644,76 +644,6 @@
       "title": "UltralyticsDetectorProvider"
     }
   },
-  "159": {
-    "inputs": {
-      "inputcount": 4,
-      "direction": "right",
-      "match_image_size": false,
-      "Update inputs": null,
-      "image_1": [
-        "106",
-        0
-      ],
-      "image_2": [
-        "8",
-        0
-      ],
-      "image_3": [
-        "137",
-        0
-      ],
-      "image_4": [
-        "155",
-        0
-      ]
-    },
-    "class_type": "ImageConcatMulti",
-    "_meta": {
-      "title": "Image Concatenate Multi"
-    }
-  },
-  "164": {
-    "inputs": {
-      "rgthree_comparer": {
-        "images": [
-          {
-            "name": "A",
-            "selected": true,
-            "url": "/api/view?filename=rgthree.compare._temp_gfnko_00013_.png&type=temp&subfolder=&rand=0.9037055563175432"
-          },
-          {
-            "name": "B",
-            "selected": true,
-            "url": "/api/view?filename=rgthree.compare._temp_gfnko_00014_.png&type=temp&subfolder=&rand=0.2252818494109735"
-          }
-        ]
-      },
-      "image_a": [
-        "155",
-        0
-      ],
-      "image_b": [
-        "106",
-        0
-      ]
-    },
-    "class_type": "Image Comparer (rgthree)",
-    "_meta": {
-      "title": "Image Comparer (rgthree)"
-    }
-  },
-  "165": {
-    "inputs": {
-      "images": [
-        "159",
-        0
-      ]
-    },
-    "class_type": "PreviewImage",
-    "_meta": {
-      "title": "预览图像"
-    }
-  },
   "167": {
     "inputs": {
       "images": [
@@ -724,24 +654,6 @@
     "class_type": "PreviewImage",
     "_meta": {
       "title": "预览图像"
-    }
-  },
-  "168": {
-    "inputs": {
-      "value": 960
-    },
-    "class_type": "INTConstant",
-    "_meta": {
-      "title": "INT Constant"
-    }
-  },
-  "169": {
-    "inputs": {
-      "value": 1280
-    },
-    "class_type": "INTConstant",
-    "_meta": {
-      "title": "INT Constant"
     }
   },
   "173": {
@@ -755,6 +667,110 @@
     "class_type": "SaveImage",
     "_meta": {
       "title": "保存图像"
+    }
+  },
+  "174": {
+    "inputs": {
+      "cmp": "a <= b",
+      "a": [
+        "175",
+        0
+      ],
+      "b": [
+        "175",
+        1
+      ]
+    },
+    "class_type": "ImpactCompare",
+    "_meta": {
+      "title": "ImpactCompare"
+    }
+  },
+  "175": {
+    "inputs": {
+      "image": [
+        "41",
+        0
+      ]
+    },
+    "class_type": "GetImageSize+",
+    "_meta": {
+      "title": "🔧 Get Image Size"
+    }
+  },
+  "176": {
+    "inputs": {
+      "boolean": [
+        "174",
+        0
+      ],
+      "on_true": [
+        "177",
+        0
+      ],
+      "on_false": [
+        "178",
+        0
+      ]
+    },
+    "class_type": "easy ifElse",
+    "_meta": {
+      "title": "竖出1280 横图出980"
+    }
+  },
+  "177": {
+    "inputs": {
+      "value": 1280
+    },
+    "class_type": "INTConstant",
+    "_meta": {
+      "title": "设置长边"
+    }
+  },
+  "178": {
+    "inputs": {
+      "value": 980
+    },
+    "class_type": "INTConstant",
+    "_meta": {
+      "title": "设置长边"
+    }
+  },
+  "179": {
+    "inputs": {
+      "cmp": "a >= b",
+      "a": [
+        "175",
+        0
+      ],
+      "b": [
+        "175",
+        1
+      ]
+    },
+    "class_type": "ImpactCompare",
+    "_meta": {
+      "title": "ImpactCompare"
+    }
+  },
+  "180": {
+    "inputs": {
+      "boolean": [
+        "179",
+        0
+      ],
+      "on_true": [
+        "177",
+        0
+      ],
+      "on_false": [
+        "178",
+        0
+      ]
+    },
+    "class_type": "easy ifElse",
+    "_meta": {
+      "title": "竖出980 横图出1280"
     }
   }
 }
