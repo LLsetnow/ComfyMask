@@ -1,1 +1,1 @@
-- [使用方法参考](https://github.com/LLsetnow/Obsidian/blob/main/AI%E7%BB%98%E5%9B%BE/%E4%BB%A3%E7%A0%81%E6%8E%A7%E5%88%B6.md)
+- [使用方法参考](https://github.com/LLsetnow/Obsidian/blob/main/AI%E7%BB%98%E5%9B%BE/%E8%87%AA%E5%8A%A8%E5%8C%96%E8%84%9A%E6%9C%AC.md)
