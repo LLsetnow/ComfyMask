@@ -88,14 +88,23 @@ class ComfyUIWorkflow:
 
 
 # 代理配置
+USE_PROXY = True  # 设置为 False 禁用代理
 PROXY_SETTINGS = {
     "http": "http://127.0.0.1:7890",
     "https": "http://127.0.0.1:7890"
 }
 
-# 设置环境变量代理
-os.environ['HTTP_PROXY'] = PROXY_SETTINGS["http"]
-os.environ['HTTPS_PROXY'] = PROXY_SETTINGS["https"]
+# 根据设置决定是否使用代理
+if USE_PROXY:
+    # 设置环境变量代理
+    os.environ['HTTP_PROXY'] = PROXY_SETTINGS["http"]
+    os.environ['HTTPS_PROXY'] = PROXY_SETTINGS["https"]
+else:
+    # 清除环境变量代理
+    if 'HTTP_PROXY' in os.environ:
+        del os.environ['HTTP_PROXY']
+    if 'HTTPS_PROXY' in os.environ:
+        del os.environ['HTTPS_PROXY']
 
 # Telegram配置
 TELEGRAM_BOT_TOKEN = "8413449344:AAE3r29-jiHjDpmFm4AMZYWH78iwwczq0QM"
@@ -273,6 +282,11 @@ def save_image_with_unique_name(source_path, target_folder):
 
 
 # Telegram API函数
+def get_proxies():
+    """根据USE_PROXY设置返回代理配置"""
+    return PROXY_SETTINGS if USE_PROXY else None
+
+
 def send_message(chat_id: str, text: str):
     """发送文本消息到Telegram"""
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
@@ -281,7 +295,7 @@ def send_message(chat_id: str, text: str):
         "text": text
     }
     try:
-        response = requests.post(url, json=data, timeout=10, proxies=PROXY_SETTINGS)
+        response = requests.post(url, json=data, timeout=10, proxies=get_proxies())
         return response.json()
     except Exception as e:
         print(f"发送消息失败: {e}")
@@ -298,7 +312,7 @@ def send_photo(chat_id: str, photo_path: str, caption: Optional[str] = None):
     try:
         with open(photo_path, 'rb') as photo_file:
             files = {"photo": photo_file}
-            response = requests.post(url, data=data, files=files, timeout=30, proxies=PROXY_SETTINGS)
+            response = requests.post(url, data=data, files=files, timeout=30, proxies=get_proxies())
         return response.json()
     except Exception as e:
         print(f"发送图片失败: {e}")
@@ -310,7 +324,7 @@ def download_telegram_photo(file_id: str):
     try:
         # 获取文件信息
         url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/getFile"
-        response = requests.get(url, params={"file_id": file_id}, timeout=10, proxies=PROXY_SETTINGS)
+        response = requests.get(url, params={"file_id": file_id}, timeout=10, proxies=get_proxies())
         file_info = response.json()
 
         if not file_info.get("ok"):
@@ -321,7 +335,7 @@ def download_telegram_photo(file_id: str):
         download_url = f"https://api.telegram.org/file/bot{TELEGRAM_BOT_TOKEN}/{file_path}"
 
         # 下载文件
-        response = requests.get(download_url, timeout=30, proxies=PROXY_SETTINGS)
+        response = requests.get(download_url, timeout=30, proxies=get_proxies())
 
         # 保存文件
         original_filename = os.path.basename(file_path)
@@ -561,7 +575,7 @@ def main():
                 f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/getUpdates",
                 params={"timeout": 30, "offset": offset if offset else None},
                 timeout=40,
-                proxies=PROXY_SETTINGS
+                proxies=get_proxies()
             ).json()
 
             if not updates.get("ok"):
@@ -704,8 +718,14 @@ def main():
             print("\n\n程序被用户中断")
             comfyui_running = False  # 停止监控线程
             break
+        except requests.exceptions.ProxyError as e:
+            print(f"代理错误: {e}")
+            print("检查代理设置或禁用代理（USE_PROXY = False）")
+            print("按 Ctrl+C 退出，或等待自动重连...")
+            time.sleep(5)
         except Exception as e:
             print(f"运行出错: {e}")
+            print("按 Ctrl+C 退出，或等待自动重连...")
             time.sleep(5)
 
     print("程序结束")

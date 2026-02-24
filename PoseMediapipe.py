@@ -1,3 +1,28 @@
+"""
+姿态与手部关键点检测工具
+
+该模块使用Mediapipe进行人体姿态和手部关键点检测，在视频上绘制骨架和手部关键点。
+
+主要功能:
+- 使用Mediapipe进行人体姿态检测（33个关键点）
+- 使用Mediapipe进行双手检测（每只手21个关键点）
+- 在视频帧上绘制骨架和关键点
+- 支持单视频或批量视频处理
+- 实时显示处理进度
+
+使用示例:
+    from PoseMediapipe import process_single_video, main
+
+    # 处理单个视频
+    process_single_video("input.mp4", "output_folder", 0)
+
+    # 批量处理文件夹中的视频
+    main()
+
+输出:
+    - 输出视频命名格式: Pose{索引}.mp4
+    - 原始视频的骨架和手部关键点可视化
+"""
 import cv2
 from cv2.gapi import video
 import numpy as np

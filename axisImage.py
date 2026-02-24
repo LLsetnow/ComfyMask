@@ -1,4 +1,30 @@
-# 用于在图像上画上灰色的网格，每个网格宽度为100像素 并添加数字，坐标原点为左上角。坐标轴每500像素一个刻度值
+"""
+图像坐标轴与网格标注工具
+
+该模块在图像上绘制灰色网格和坐标轴，用于辅助定位和测量。
+
+主要功能:
+- 在图像上绘制灰色网格线（网格间隔100像素）
+- 绘制X轴和Y轴坐标轴（黑色粗线）
+- 显示坐标刻度值（红色文字）
+- 坐标原点位于左上角
+- 支持自定义网格间隔和刻度间隔
+
+使用示例:
+    from axisImage import axisImage
+    from PIL import Image
+
+    # 打开图像并添加坐标轴
+    image = Image.open("input.jpg")
+    axisImage(image, "output_with_axis.jpg")
+
+网格规格:
+    - 网格宽度: 100像素
+    - 刻度间隔: 100像素
+    - 坐标轴颜色: 黑色
+    - 网格线颜色: 灰色 (128, 128, 128)
+    - 刻度文字颜色: 红色
+"""
 import cv2
 from PIL import Image, ImageDraw
 def axisImage(image, output_path):

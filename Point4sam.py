@@ -1,5 +1,36 @@
 """
-通过读取视频的第一帧。通过鼠标左键为正样本,右键为负样本,通过键盘的q键退出。并将样本点坐标写入json文件。
+SAM提示点标注工具
+
+该模块提供交互式点标注功能，用于为SAM（Segment Anything Model）准备正负样本点数据。
+
+主要功能:
+- 读取视频第一帧并显示
+- 鼠标左键点击添加正样本点（绿色标记）
+- 鼠标右键点击添加负样本点（红色标记）
+- 键盘'q'键退出并保存标注
+- 自动缩放大图以适应显示窗口
+- 保存标注点到JSON文件
+- 支持在原图上可视化标注点（五角星标记）
+
+使用示例:
+    from Point4sam import process_videos, mark_points_on_video
+
+    # 标注视频
+    process_videos("video_folder", "json_output_folder")
+
+    # 在图像上标记标注点
+    mark_points_on_video("input.mp4", "json_folder", "output_image_folder")
+
+交互说明:
+    - 左键: 添加正样本点（前景）
+    - 右键: 添加负样本点（背景）
+    - Q键: 退出并保存
+
+JSON输出格式:
+    {
+        "positive": [[x1, y1], [x2, y2], ...],
+        "negative": [[x3, y3], [x4, y4], ...]
+    }
 """
 import cv2
 import numpy as np

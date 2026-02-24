@@ -1,5 +1,26 @@
 """
-遍历文件夹，裁剪面部
+主体裁剪与归一化工具
+
+该模块使用Mediapipe Selfie Segmentation进行人体分割，自动裁剪主体并缩放到指定尺寸。
+
+主要功能:
+- 使用Mediapipe Selfie Segmentation进行人体/主体分割
+- 自动检测并裁剪主体区域
+- 按比例调整裁剪区域（crop_ratio控制裁剪范围）
+- 缩放到统一目标尺寸（默认720x1080）
+- 输出图像文件和对应的索引txt文件
+
+使用示例:
+    from CropBody import process_images
+
+    # 裁剪主体，crop_ratio越小越贴近人脸，越大越包含身体
+    process_images("input_folder", "output_folder", crop_ratio=0.7)
+
+参数说明:
+    crop_ratio: 裁切比例 (0~1)
+        - 0.5: 紧贴主体
+        - 0.7: 包含主体周围一定空间
+        - 1.0: 保持原始检测框大小
 """
 
 import cv2

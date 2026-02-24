@@ -10,13 +10,19 @@
 - 自动处理视频时长与音频同步问题。
 
 使用示例:
-    from change_fps import change_video_fps_advanced
+    from change_fps import change_video_fps_advanced, batch_change_video_fps
 
     # 降低帧率并保留音频
-    success = change_video_fps_advanced("input.mp4", "output.mp4", 24, method='drop', keep_audio=True)
+    change_video_fps_advanced("input.mp4", "output.mp4", 24, method='drop', keep_audio=True)
 
-    # 提高帧率并丢弃音频
-    success = change_video_fps_advanced("input.mp4", "output.mp4", 60, method='repeat', keep_audio=False)
+    # 提高帧率并调整分辨率
+    change_video_fps_advanced("input.mp4", "output.mp4", 60, method='repeat', keep_audio=False, new_width=512, new_height=896)
+
+    # 批量处理文件夹中的视频
+    batch_change_video_fps("input_folder", "output_folder", 16, keep_audio=True, new_width=512, new_height=896)
+
+    # 截取视频第20帧
+    extract_frame("input.mp4", 20, "output_folder")
 
 注意事项:
 - 帧插值功能需要 OpenCV 4.2+ 支持，否则会自动降级为重复帧方法。
@@ -29,9 +35,75 @@ import cv2
 import os
 from moviepy.editor import VideoFileClip, AudioFileClip
 import tempfile
+from pathlib import Path
+import random
+import string
 
 
-def change_video_fps_advanced(video_path, output_path, n, method='drop', keep_audio=True, new_width=None, new_height=None):
+def generate_random_filename(length=15):
+    """生成指定长度的随机文件名（数字和字母组合）"""
+    characters = string.digits  # 只使用数字
+    return ''.join(random.choice(characters) for _ in range(length))
+
+
+def extract_frame(video_path, frame_number, output_dir=r"D:\AI_Graph\输入\输入首帧"):
+    """
+    从视频中截取指定帧并保存为JPG图像
+
+    参数:
+        video_path: 输入视频文件路径
+        frame_number: 要截取的帧索引（从0开始）
+        output_dir: 输出目录，默认为 D:\AI_Graph\输入\输入首帧
+
+    返回:
+        bool: 成功返回True，失败返回False
+    """
+    # 创建输出目录
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    # 检查视频文件是否存在
+    if not os.path.exists(video_path):
+        print(f"错误: 视频文件不存在: {video_path}")
+        return False
+
+    # 打开视频
+    cap = cv2.VideoCapture(video_path)
+    if not cap.isOpened():
+        print(f"错误: 无法打开视频文件: {video_path}")
+        return False
+
+    # 获取视频总帧数
+    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    if frame_number >= total_frames:
+        print(f"错误: 帧索引 {frame_number} 超出范围（视频共 {total_frames} 帧）")
+        cap.release()
+        return False
+
+    # 定位到指定帧
+    cap.set(cv2.CAP_PROP_POS_FRAMES, frame_number)
+
+    # 读取帧
+    ret, frame = cap.read()
+    if not ret:
+        print(f"错误: 无法读取第 {frame_number} 帧")
+        cap.release()
+        return False
+
+    # 生成输出文件名（与视频同名，.jpg后缀）
+    video_name = Path(video_path).stem
+    output_path = output_dir / f"{video_name}.jpg"
+
+    # 保存帧为JPG图像
+    cv2.imwrite(str(output_path), frame)
+    print(f"成功保存第 {frame_number} 帧到: {output_path}")
+    print(f"输出文件名: {video_name}.jpg")
+
+    cap.release()
+    return True
+
+
+def change_video_fps_advanced(video_path, output_path, n, method='drop', keep_audio=True, new_width=None, new_height=None, extract_frame_number=None, extract_frame_dir=r"D:\AI_Graph\输入\输入首帧", use_random_filename=False):
     """
     高级视频帧率转换函数
 
@@ -44,6 +116,11 @@ def change_video_fps_advanced(video_path, output_path, n, method='drop', keep_au
         - 'repeat': 重复帧（适用于提高帧率）
         - 'interpolate': 帧插值（适用于提高帧率，需要OpenCV 4.2+）
     keep_audio: 是否保留原视频的音频
+    new_width: 输出视频宽度（可选）
+    new_height: 输出视频高度（可选）
+    extract_frame_number: 从缩放后的视频中截取指定帧的索引（可选，例如20表示第20帧）
+    extract_frame_dir: 截取帧的输出目录（默认为 D:\AI_Graph\输入\输入首帧）
+    use_random_filename: 是否使用随机15位数字作为文件名（默认为False）
 
     返回:
     bool: 成功返回True，失败返回False
@@ -52,6 +129,13 @@ def change_video_fps_advanced(video_path, output_path, n, method='drop', keep_au
     if not os.path.exists(video_path):
         print(f"错误: 输入视频文件不存在: {video_path}")
         return False
+
+    # 生成随机文件名（如果需要）
+    random_name = None
+    if use_random_filename:
+        random_name = generate_random_filename(15)
+        # 替换输出路径的文件名部分
+        output_path = str(Path(output_path).parent / f"{random_name}.mp4")
 
     # 创建输出目录（如果不存在）
     output_dir = os.path.dirname(output_path)
@@ -74,6 +158,15 @@ def change_video_fps_advanced(video_path, output_path, n, method='drop', keep_au
         total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
         width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
         height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+
+        # 检查要截取的帧数是否在范围内
+        if extract_frame_number is not None and extract_frame_number >= total_frames:
+            print(f"警告: 要截取的第 {extract_frame_number} 帧超出了视频范围（共 {total_frames} 帧）")
+            extract_frame_number = min(extract_frame_number, total_frames - 1)
+            print(f"已调整为截取第 {extract_frame_number} 帧")
+
+        # 初始化 resized_frame 变量
+        resized_frame = None
 
         # 确定输出帧率
         if n == 0:
@@ -112,6 +205,11 @@ def change_video_fps_advanced(video_path, output_path, n, method='drop', keep_au
                 if new_width is not None and new_height is not None:
                     frame = cv2.resize(frame, (new_width, new_height))
 
+                # 保存缩放后的第20帧（如果需要截取）
+                if extract_frame_number is not None and frame_count == extract_frame_number:
+                    resized_frame = frame.copy()
+                    print(f"已捕获缩放后的第 {extract_frame_number} 帧，帧尺寸: {frame.shape}")
+
                 # 根据帧间隔决定是否保存当前帧
                 if frame_count % round(frame_interval) == 0:
                     out.write(frame)
@@ -139,6 +237,11 @@ def change_video_fps_advanced(video_path, output_path, n, method='drop', keep_au
                     # 调整分辨率（如果指定）
                     if new_width is not None and new_height is not None:
                         frame = cv2.resize(frame, (new_width, new_height))
+
+            # 保存缩放后的第20帧（如果需要截取）
+                if extract_frame_number is not None and frame_count == extract_frame_number:
+                    resized_frame = frame.copy()
+                    print(f"已捕获缩放后的第 {extract_frame_number} 帧，帧尺寸: {frame.shape}")
 
                     # 重复写入当前帧
                     for _ in range(round(repeat_factor)):
@@ -169,6 +272,34 @@ def change_video_fps_advanced(video_path, output_path, n, method='drop', keep_au
 
         # 保留音频 - 使用moviepy处理音频
         print("正在处理音频...")
+
+        # 在处理音频之前先保存截取的帧
+        frame_saved = False
+        if extract_frame_number is not None:
+            print(f"准备保存第 {extract_frame_number} 帧，resized_frame={'存在' if resized_frame is not None else '不存在'}")
+            if resized_frame is not None:
+                # 使用在处理过程中保存的帧
+                # 创建输出目录
+                frame_output_dir = Path(extract_frame_dir)
+                frame_output_dir.mkdir(parents=True, exist_ok=True)
+
+                # 生成输出文件名（使用随机文件名或视频文件名）
+                if random_name:
+                    frame_filename = f"{random_name}.jpg"
+                else:
+                    video_name = Path(output_path).stem
+                    frame_filename = f"{video_name}.jpg"
+                frame_output_path = frame_output_dir / frame_filename
+
+                # 保存截取的帧
+                success = cv2.imwrite(str(frame_output_path), resized_frame)
+                if success:
+                    print(f"已从缩放后的视频中截取第 {extract_frame_number} 帧到: {frame_output_path}")
+                    frame_saved = True
+                else:
+                    print(f"保存第 {extract_frame_number} 帧失败")
+            else:
+                print(f"未在处理过程中捕获到第 {extract_frame_number} 帧，将尝试从输出视频中截取")
 
         try:
             # 从原视频提取音频
@@ -245,6 +376,11 @@ def change_video_fps_advanced(video_path, output_path, n, method='drop', keep_au
         if os.path.exists(temp_video_path):
             os.remove(temp_video_path)
 
+        # 如果之前没有保存帧，现在从输出视频中截取
+        if extract_frame_number is not None and not frame_saved:
+            print(f"尝试从输出视频中截取第 {extract_frame_number} 帧...")
+            extract_frame(output_path, extract_frame_number, extract_frame_dir)
+
         print(f"处理完成! 输出视频: {output_path}")
         return True
 
@@ -256,7 +392,7 @@ def change_video_fps_advanced(video_path, output_path, n, method='drop', keep_au
         return False
 
 
-def batch_change_video_fps(input_folder, output_folder, n, file_extensions=['.mp4', '.avi', '.mov'], keep_audio=True, new_width=None, new_height=None):
+def batch_change_video_fps(input_folder, output_folder, n, extract_frame_dir, file_extensions=['.mp4', '.avi', '.mov'], keep_audio=True, new_width=None, new_height=None, extract_frame_number=None, use_random_filename=False):
     """
     批量处理文件夹中的所有视频文件
 
@@ -264,8 +400,13 @@ def batch_change_video_fps(input_folder, output_folder, n, file_extensions=['.mp
     input_folder: 输入文件夹路径
     output_folder: 输出文件夹路径
     n: 目标帧率
+    extract_frame_dir: 截取帧的输出目录（默认为 D:\AI_Graph\输入\输入首帧）
     file_extensions: 要处理的视频文件扩展名列表
     keep_audio: 是否保留音频
+    new_width: 输出视频宽度（可选）
+    new_height: 输出视频高度（可选）
+    extract_frame_number: 从缩放后的视频中截取指定帧的索引（可选）
+    use_random_filename: 是否使用随机15位数字作为文件名（默认为False）
     """
     # 确保输出文件夹存在
     if not os.path.exists(output_folder):
@@ -289,8 +430,18 @@ def batch_change_video_fps(input_folder, output_folder, n, file_extensions=['.mp
         input_path = os.path.join(input_folder, video_file)
         output_path = os.path.join(output_folder, video_file)
 
-        # 处理视频
-        success = change_video_fps_advanced(input_path, output_path, n, keep_audio=keep_audio, new_width=new_width, new_height=new_height)
+        # 处理视频（并截取指定帧）
+        success = change_video_fps_advanced(
+            input_path,
+            output_path,
+            n,
+            keep_audio=keep_audio,
+            new_width=new_width,
+            new_height=new_height,
+            extract_frame_number=extract_frame_number,
+            extract_frame_dir=extract_frame_dir,
+            use_random_filename=use_random_filename
+        )
 
         if success:
             print(f"成功处理: {video_file}")
@@ -304,9 +455,19 @@ def main():
     output_folder = r"D:\AI_Graph\输入\原视频_16fps"
 
     print("\n\n\n----------------------------------------------------------------------")
-    print(f"将{input_folder}文件夹内的视频处理为16fps, 输出到{output_folder}")
-    # 批量将所有视频转换为16 FPS，并保留音频
-    batch_change_video_fps(input_folder, output_folder, 16, keep_audio=True, new_width=512, new_height=896)
+    print(f"将{input_folder}文件夹内的视频处理为30fps，并从缩放后的视频中截取第20帧")
+    # 批量将所有视频转换为16 FPS，保留音频，缩放到720x1080，从缩放后的视频中截取第20帧，并使用随机15位数字作为文件名
+    batch_change_video_fps(
+        input_folder,
+        output_folder,
+        30,
+        extract_frame_dir=r"D:\AI_Graph\输入\输入首帧",
+        keep_audio=True,
+        new_width=720,
+        new_height=1080,
+        extract_frame_number=20,
+        use_random_filename=True
+    )
     print("处理完成")
 
 if __name__ == "__main__":
